@@ -1,40 +1,29 @@
-export const config = { runtime: 'edge' };
+export const config = { maxDuration: 60 };
 
-export default async function handler(req) {
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Api-Key',
-      },
-    });
+    return res.status(204).end();
   }
 
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: '仅支持 POST 请求' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(405).json({ error: '仅支持 POST 请求' });
   }
 
-  const apiKey = req.headers.get('x-api-key');
+  const apiKey = req.headers['x-api-key'];
   if (!apiKey || !apiKey.startsWith('sk-')) {
-    return new Response(JSON.stringify({ error: 'API Key 无效，请在设置中填入有效的 DeepSeek Key（sk-...）' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(401).json({ error: 'API Key 无效，请填入有效的 DeepSeek Key（sk-...）' });
   }
 
   let body;
   try {
-    body = await req.json();
+    body = req.body;
+    if (typeof body === 'string') body = JSON.parse(body);
   } catch {
-    return new Response(JSON.stringify({ error: '请求格式错误' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(400).json({ error: '请求格式错误' });
   }
 
   const endpoint = (body.endpoint || '').includes('openrouter')
@@ -66,30 +55,11 @@ export default async function handler(req) {
 
     if (!upstream.ok) {
       const msg = data?.error?.message || `上游错误 ${upstream.status}`;
-      return new Response(JSON.stringify({ error: msg }), {
-        status: upstream.status,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
+      return res.status(upstream.status).json({ error: msg });
     }
 
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-store',
-      },
-    });
+    return res.status(200).json(data);
   } catch (e) {
-    return new Response(JSON.stringify({ error: '代理请求失败：' + e.message }), {
-      status: 502,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+    return res.status(502).json({ error: '代理请求失败：' + e.message });
   }
 }
