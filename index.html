@@ -541,10 +541,23 @@ Regeln:
 - pos bleibt als Abkürzung (VVFIN, NN usw.) — diese werden in der App übersetzt.
 
 KRITISCHE SYNTAXREGELN — unbedingt beachten:
-1. ROOT muss IMMER das finite Verb sein (VVFIN oder VAFIN). Niemals ein Substantiv, Pronomen oder Adjektiv als ROOT. Bei Perfekt: ROOT = Hilfsverb (habe/haben/ist/sind), das Partizip II ist OC oder HD, hängt von ROOT ab.
-2. Genitivattribut: Wenn eine Nominalphrase den Besitzer eines Nomens angibt (z.B. "meiner Mutter" bei "Apfel meiner Mutter"), dann ist das Genitivattribut (dep_label=GATTR oder ATTR, case=Gen), NICHT Dativobjekt (DA). DA nur bei Verben die tatsächlich Dativ fordern (geben, sagen, helfen, erzählen etc.).
+1. ROOT nach Universal Dependencies (UD): ROOT ist IMMER das semantische Hauptverb (Vollverb). Beispiele:
+   - Perfekt "Ich habe das Brot gegessen": ROOT=gegessen (VVPP), habe=AUX (abhängig von gegessen mit label AUX)
+   - Passiv "Das Brot wird gegessen": ROOT=gegessen (VVPP), wird=AUX
+   - Modalverb "Ich kann essen": ROOT=essen (VVINF), kann=AUX
+   - Kopula "Er ist müde": ROOT=müde (ADJD) oder ist (VAFIN) — bei Kopulasätzen ROOT=Prädikativ oder Verb, konsistent bleiben
+   - Einfaches Präsens "Ich esse": ROOT=esse (VVFIN), kein AUX nötig
+   NIEMALS ein Substantiv, Pronomen oder Adjektiv als ROOT (außer beim Kopulasatz-Prädikativ).
+2. Genitivattribut vs. Dativobjekt:
+   - "meiner Mutter" nach einem NOMEN (Apfel meiner Mutter) → GATTR/ATTR, case=Gen (属格定语，表所属)
+   - "meiner Mutter" nach einem VERB das Dativ fordert (erzählen, geben, helfen) → DA, case=Dat (间接宾语)
+   - Passive Agens "von meiner Schwester" → MO (状语，施事), NICHT DA.
 3. Kasus-Unterscheidung: meiner Mutter nach einem Nomen = Genitiv (第二格，所属). meiner Mutter nach Verb = Dativ (第三格，间接宾语).
-4. Hilfsverb (haben/sein) bei Perfekt: dep_label=AUX (不是ROOT). Das Partizip II hängt als Hauptverb von AUX ab oder umgekehrt je nach Konvention — konsistent bleiben.
+4. Hilfsverben immer als AUX markieren (dep_label=AUX), nie als ROOT:
+   - haben/sein bei Perfekt → AUX, hängt von Partizip II ab
+   - werden bei Passiv → AUX, hängt von Partizip II ab  
+   - können/müssen/dürfen/wollen/sollen/mögen → AUX, hängt von Infinitiv ab
+   Richtung: AUX→ROOT (Pfeil von Hilfsverb zum Vollverb).
 5. Keine erfundenen Labels verwenden. Erlaubte dep_labels: ROOT, SB, OA, DA, OG, MO, PD, OBJ, OC, ATTR, GATTR, CP, NG, ADV, AUX, KON, CJ, APP, PUNCT.
 - Nur JSON zurückgeben.`;
 
@@ -607,9 +620,11 @@ async function analyze(){
     const msg=e.message||String(e);
     let hint='';
     if(msg.includes('fetch')||msg.includes('network')||msg.includes('Failed')){
-      hint='<br><span style="font-size:11px">提示：请确认①在本地浏览器打开此文件（非 claude.ai）②网络能访问 api.deepseek.com ③API Key 正确</span>';
+      hint='<br><span style="font-size:11px">提示：①检查网络连接 ②确认 API Key 正确 ③句子过长时请尝试缩短后重试</span>';
     } else if(msg.includes('401')||msg.includes('Unauthorized')){
       hint='<br><span style="font-size:11px">提示：API Key 无效或已过期，请重新获取</span>';
+    } else if(msg.includes('504')||msg.includes('超时')){
+      hint='<br><span style="font-size:11px">提示：句子可能过长或过于复杂，请尝试缩短后重试；或稍等片刻再次分析</span>';
     } else if(msg.includes('429')){
       hint='<br><span style="font-size:11px">提示：请求太频繁，稍等几秒再试</span>';
     } else if(msg.includes('截断')||msg.includes('length')){
@@ -900,7 +915,7 @@ function renderDep(){
     const arcH=Math.min(18+dist*24,128);
     const mx=(x1+x2)/2,cy=BASELINE-arcH;
     html+=`<path d="M${x1},${BASELINE} Q${mx},${cy} ${x2},${BASELINE}" fill="none" stroke="#C8C5BB" stroke-width="0.9" marker-end="url(#ah)"/>`;
-    const depZh={'ROOT':'根节点（限定动词）','SB':'主语','OA':'直接宾语(Akk)','DA':'间接宾语(Dat)','OG':'属格宾语(Gen)','MO':'状语','PD':'表语','OBJ':'宾语从句','OC':'补足语从句','ATTR':'定语','GATTR':'属格定语（所属）','CP':'引导词','NG':'否定','ADV':'副词修饰','AUX':'助动词','KON':'并列连词','CJ':'并列成分','APP':'同位语','PUNCT':'标点'};
+    const depZh={'ROOT':'根节点（实义动词，UD体系）','SB':'主语','OA':'直接宾语(Akk)','DA':'间接宾语(Dat)','OG':'属格宾语(Gen)','MO':'状语','PD':'表语','OBJ':'宾语从句','OC':'补足语从句','ATTR':'定语','GATTR':'属格定语（所属）','CP':'引导词','NG':'否定','ADV':'副词修饰','AUX':'助动词','KON':'并列连词','CJ':'并列成分','APP':'同位语','PUNCT':'标点'};
     const lZh=depZh[a.l]?a.l+'\n'+depZh[a.l]:a.l;
     html+=`<text x="${mx}" y="${cy-4}" text-anchor="middle" font-size="10" fill="#A0A09A" font-family="-apple-system,sans-serif"><title>${esc(lZh)}</title>${esc(a.l)}</text>`;
   });
@@ -1050,7 +1065,7 @@ function renderClauseDep(cb){
     const arcH=Math.min(16+dist*20,90);
     const mx=(x1+x2)/2, cy=BASELINE-arcH;
     html+=`<path d="M${x1},${BASELINE} Q${mx},${cy} ${x2},${BASELINE}" fill="none" stroke="#C8C5BB" stroke-width="0.8" marker-end="url(#cah)"/>`;
-    const cDepZh={'ROOT':'根节点（限定动词）','SB':'主语','OA':'直接宾语(Akk)','DA':'间接宾语(Dat)','OG':'属格宾语(Gen)','MO':'状语','PD':'表语','OBJ':'宾语从句','ATTR':'定语','GATTR':'属格定语','CP':'引导词','NG':'否定','ADV':'副词修饰','AUX':'助动词'};
+    const cDepZh={'ROOT':'根节点（实义动词，UD体系）','SB':'主语','OA':'直接宾语(Akk)','DA':'间接宾语(Dat)','OG':'属格宾语(Gen)','MO':'状语','PD':'表语','OBJ':'宾语从句','ATTR':'定语','GATTR':'属格定语','CP':'引导词','NG':'否定','ADV':'副词修饰','AUX':'助动词'};
     const clZh=cDepZh[a.l]?a.l+' '+cDepZh[a.l]:a.l;
     html+=`<text x="${mx}" y="${cy-2}" text-anchor="middle" font-size="8" fill="#B4B2A9" font-family="-apple-system,sans-serif"><title>${esc(clZh)}</title>${esc(a.l)}</text>`;
   });
@@ -1159,7 +1174,7 @@ document.getElementById('sent').addEventListener('keydown',e=>{if(e.key==='Enter
 
 // ── Reference tables ─────────────────────────────────────────────────────────
 const DEP_LABELS={
-  ROOT:'根节点 — 句子的核心限定动词（永远是动词，不是主语）',
+  ROOT:'根节点 — 句子的语义核心动词（实义动词，UD体系：Perfekt中过去分词为ROOT，助动词为AUX）',
   SB:'主语（Subjekt）— 第一格名词短语',
   OA:'直接宾语（Akkusativobjekt）— 第四格',
   DA:'间接宾语（Dativobjekt）— 第三格，常见于 geben/sagen/erzählen 等动词',
@@ -1173,7 +1188,7 @@ const DEP_LABELS={
   CP:'引导词（Komplementierer）— 从属连词或关系代词',
   NG:'否定词（Negation）— nicht / kein',
   ADV:'副词性修饰',
-  AUX:'助动词（Auxiliar）— haben / sein / werden 与主动词构成复合时态',
+  AUX:'助动词（Auxiliar）— haben/sein（完成时）、werden（被动/将来时）、情态动词，依附于实义动词，不是ROOT',
   VF:'前场成分（Vorfeld）— 占据 VF 位置的论元（依存树中标注位置信息时使用）',
   PUNCT:'标点符号',
   KON:'并列连词（Konjunktion）',

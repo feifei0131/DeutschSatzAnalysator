@@ -1,4 +1,4 @@
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 60 }; // Vercel Hobby max is 60s; upgrade to Pro for up to 300s
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -38,7 +38,12 @@ export default async function handler(req, res) {
   };
 
   try {
+    // AbortController for explicit timeout (give DeepSeek 55s, leaving 5s buffer)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
+
     const upstream = await fetch(endpoint, {
+      signal: controller.signal,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,6 +56,7 @@ export default async function handler(req, res) {
       body: JSON.stringify(upstreamBody),
     });
 
+    clearTimeout(timeoutId);
     const data = await upstream.json();
 
     if (!upstream.ok) {
@@ -60,6 +66,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json(data);
   } catch (e) {
+    if (e.name === 'AbortError') {
+      return res.status(504).json({ error: '分析超时（DeepSeek 响应时间超过55秒）。建议：①尝试更短的句子 ②稍后重试' });
+    }
     return res.status(502).json({ error: '代理请求失败：' + e.message });
   }
 }
