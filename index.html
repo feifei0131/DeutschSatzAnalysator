@@ -284,7 +284,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:3px}
           <div class="gloss-section">
             <h4>拓扑场域（词块背景色）</h4>
             <div class="gloss-row"><span class="gloss-code">VF</span><span class="gloss-full">前场</span><span class="gloss-zh">Vorfeld — 动词前唯一成分</span></div>
-            <div class="gloss-row"><span class="gloss-code">LSK</span><span class="gloss-full">左括号</span><span class="gloss-zh">Linke Satzklammer — 限定动词</span></div>
+            <div class="gloss-row"><span class="gloss-code">LSK</span><span class="gloss-full">左括号</span><span class="gloss-zh">Linke Satzklammer — 限定动词（主句）或从属连词（从句 C 位）</span></div>
             <div class="gloss-row"><span class="gloss-code">RSK</span><span class="gloss-full">右括号</span><span class="gloss-zh">Rechte Satzklammer — 过去分词/不定式</span></div>
             <div class="gloss-row"><span class="gloss-code">MF</span><span class="gloss-full">中间场</span><span class="gloss-zh">Mittelfeld — 括号之间的成分</span></div>
             <div class="gloss-row"><span class="gloss-code">C</span><span class="gloss-full">引导词位</span><span class="gloss-zh">Komplementierer — dass/weil/wenn 等</span></div>
@@ -554,10 +554,19 @@ KRITISCHE SYNTAXREGELN — unbedingt beachten:
    - Passive Agens "von meiner Schwester" → MO (状语，施事), NICHT DA.
 3. Kasus-Unterscheidung: meiner Mutter nach einem Nomen = Genitiv (第二格，所属). meiner Mutter nach Verb = Dativ (第三格，间接宾语).
 4. Hilfsverben immer als AUX markieren (dep_label=AUX), nie als ROOT:
-   - haben/sein bei Perfekt → AUX, hängt von Partizip II ab
-   - werden bei Passiv → AUX, hängt von Partizip II ab  
-   - können/müssen/dürfen/wollen/sollen/mögen → AUX, hängt von Infinitiv ab
-   Richtung: AUX→ROOT (Pfeil von Hilfsverb zum Vollverb).
+   - haben/sein bei Perfekt → AUX, abhängig vom Partizip II (ROOT)
+   - werden bei Vorgangspassiv → AUX, abhängig vom Partizip II (ROOT)
+   - Modalverben (können/müssen/dürfen/wollen/sollen/mögen) → AUX, abhängig vom Infinitiv (ROOT)
+   Richtung der arc: AUX hängt von ROOT ab (nicht umgekehrt).
+
+5. Verbalkomplex im RSK (Nebensatz): Bei Modalpassiv oder anderen Verbstapeln stehen ALLE Verbteile im RSK.
+   Reihenfolge im RSK von links nach rechts: Vollverb (Partizip/Infinitiv) → Passivhilfsverb → Modalverb
+   Beispiel "eingeführt werden darf": field=RSK für alle drei. role auf Chinesisch:
+   - eingeführt: 实义动词（过去分词，根节点）
+   - werden: 助动词（被动）
+   - darf: 情态助动词
+   Alle drei als separate Tokens in main_tokens, alle mit field=RSK, layer=klammer.
+   Im topological field: LSK = dass (C-Position), RSK = eingeführt + werden + darf (Verbalkomplex).
 5. Keine erfundenen Labels verwenden. Erlaubte dep_labels: ROOT, SB, OA, DA, OG, MO, PD, OBJ, OC, ATTR, GATTR, CP, NG, ADV, AUX, KON, CJ, APP, PUNCT.
 - Nur JSON zurückgeben.`;
 
@@ -699,6 +708,33 @@ function renderTopo(){
   const row=document.getElementById('topo-row');
   row.innerHTML='';
 
+  // Add Verbalkomplex bracket label under consecutive RSK tokens
+  (()=>{
+    const cols=Array.from(row.children);
+    let rskRun=[];
+    const flushRsk=()=>{
+      if(rskRun.length>1){
+        // add a small label under the group
+        const wrap=document.createElement('div');
+        wrap.style.cssText='grid-column:span '+rskRun.length+';text-align:center;font-size:9px;color:var(--lc-klammer);margin-top:2px;letter-spacing:.04em';
+        wrap.textContent='▲ 动词复合体（右括号）';
+        // insert after last RSK col — use a wrapper approach
+        const last=rskRun[rskRun.length-1];
+        const marker=document.createElement('div');
+        marker.style.cssText='font-size:9px;color:var(--lc-klammer);text-align:center;margin-top:1px;width:100%';
+        marker.textContent='┘';
+        // simpler: just bold the field headers
+        rskRun.forEach(c=>{const h=c.querySelector('.fhd');if(h)h.style.fontWeight='600';});
+      }
+      rskRun=[];
+    };
+    cols.forEach(col=>{
+      if(col.dataset&&col.dataset.field==='RSK') rskRun.push(col);
+      else flushRsk();
+    });
+    flushRsk();
+  })();
+
   // NF note
   const nfNote=document.getElementById('nf-note');
   if(DATA.nf_note){nfNote.style.display='';nfNote.innerHTML=`<strong>后场说明：</strong>${esc(DATA.nf_note)}`;}
@@ -721,6 +757,8 @@ function renderTopo(){
       tok.innerHTML=`${esc(item.word)}<div class="tsub">${esc(item.role)}</div>`;
       tok.onclick=()=>showTopoInfo(item,tok);
       col.appendChild(hd); col.appendChild(tok); row.appendChild(col);
+      col.dataset.field = item.field;
+      col.dataset.layer = item.layer;
 
     } else if(item.type==='clause_block'){
       const vis=activeLayers.has('sub');
@@ -1225,7 +1263,7 @@ const POS_LABELS={
 const FIELD_LABELS={
   VF:'前场（Vorfeld）— 动词前，通常一个成分',
   LSK:'左括号（linke Satzklammer）— 定式动词',
-  RSK:'右括号（rechte Satzklammer）— 不定式 / 过去分词',
+  RSK:'右括号（rechte Satzklammer）— 可包含多个动词：过去分词 + 被动助动词 + 情态动词，从左到右语义由实到虚',
   MF:'中间场（Mittelfeld）— 括号之间的成分',
   NF:'后场（Nachfeld）— 括号之后，通常为从句',
   C:'引导词位（Komplementierer）— 从句连词 / 关系代词',
