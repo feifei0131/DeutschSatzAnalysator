@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>德语句法分析器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f7f6f2;--bg3:#f0efe9;
+  --text:#1a1a18;--text2:#5f5e5a;--text3:#888780;
+  --border:#e0ddd4;--border2:#c8c5bb;
+  --r:8px;--rlg:12px;
+  /* Field colors — encode FIELD only */
+  --vf-bg:#FAECE7;--vf-bd:#D85A30;--vf-tx:#712B13;
+  --lsk-bg:#EEEDFE;--lsk-bd:#7F77DD;--lsk-tx:#26215C;
+  --mf-bg:#E1F5EE;--mf-bd:#1D9E75;--mf-tx:#04342C;
+  --c-bg:#E6F1FB;--c-bd:#378ADD;--c-tx:#042C53;
+  --nf-bg:#FAEEDA;--nf-bd:#BA7517;--nf-tx:#412402;
+  --neg-bg:#FBEAF0;--neg-bd:#D4537E;--neg-tx:#4B1528;
+  --none-bg:var(--bg2);--none-bd:var(--border);--none-tx:var(--text2);
+  /* Layer strip colors */
+  --lc-core:#1D9E75;--lc-klammer:#7F77DD;--lc-sub:#378ADD;--lc-adv:#BA7517;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e1e1c;--bg2:#2a2a27;--bg3:#333330;
+  --text:#e8e6de;--text2:#9c9a92;--text3:#6e6c66;
+  --border:#3a3a36;--border2:#4a4a46;
+  --vf-bg:#4A1B0C;--vf-bd:#993C1D;--vf-tx:#F5C4B3;
+  --lsk-bg:#26215C;--lsk-bd:#534AB7;--lsk-tx:#CECBF6;
+  --mf-bg:#04342C;--mf-bd:#0F6E56;--mf-tx:#9FE1CB;
+  --c-bg:#042C53;--c-bd:#185FA5;--c-tx:#B5D4F4;
+  --nf-bg:#412402;--nf-bd:#854F0B;--nf-tx:#FAC775;
+  --neg-bg:#4B1528;--neg-bd:#993556;--neg-tx:#F4C0D1;
+}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:14px;min-height:100vh;padding:24px 16px}
+details>summary{list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details[open]>summary{color:var(--text)}
+details>summary::before{content:'▸ ';font-size:10px}
+details[open]>summary::before{content:'▾ '}
+.app{max-width:960px;margin:0 auto}
+h1{font-size:20px;font-weight:600;margin-bottom:3px}
+.sub{font-size:13px;color:var(--text2);margin-bottom:18px}
+
+/* API */
+.api-setup{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px 16px;margin-bottom:14px}
+.api-setup summary{font-size:13px;font-weight:500;cursor:pointer;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px}
+.api-setup summary::-webkit-details-marker{display:none}
+.api-row{display:flex;gap:8px;margin-top:10px}
+.api-row input{flex:1;padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace}
+.smb{padding:6px 14px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);cursor:pointer;font-size:12px;transition:all .15s}
+.smb:hover{background:var(--bg3)}
+.api-note{font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5}
+.api-st{font-size:11px;margin-top:4px}.api-st.ok{color:#1D9E75}.api-st.err{color:#D85A30}
+
+/* Input */
+.input-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rlg);padding:14px 16px;margin-bottom:8px}
+.input-row{display:flex;gap:8px;margin-bottom:10px}
+.input-row input{flex:1;padding:9px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:14px}
+.input-row input:focus{outline:none;border-color:var(--c-bd)}
+.abtn{padding:9px 20px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;white-space:nowrap;transition:all .15s}
+.abtn:hover{background:var(--bg3)}.abtn:disabled{opacity:.4;cursor:not-allowed}
+.exs{display:flex;gap:5px;flex-wrap:wrap}
+.ex{padding:3px 10px;border:0.5px solid var(--border);border-radius:20px;font-size:11px;color:var(--text2);cursor:pointer;background:transparent;transition:all .15s}
+.ex:hover{border-color:var(--border2);color:var(--text)}
+
+/* Status */
+.statusbar{font-size:12px;color:var(--text3);min-height:20px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.spin{width:12px;height:12px;border:1.5px solid var(--border2);border-top-color:var(--c-bd);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.statusbar.err{color:#D85A30}
+
+/* Tabs */
+.tabs{display:flex;gap:5px;margin-bottom:14px;border-bottom:0.5px solid var(--border);padding-bottom:10px}
+.tab{padding:5px 16px;border-radius:var(--r);border:0.5px solid transparent;cursor:pointer;font-size:13px;color:var(--text2);background:transparent;transition:all .15s}
+.tab.active{border-color:var(--border2);background:var(--bg2);color:var(--text);font-weight:500}
+.sechd{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+
+/* ═══ TOPO — main clause row ═══ */
+.topo-scroll{overflow-x:auto;padding-bottom:8px;margin-bottom:2px}
+.topo-row{display:flex;gap:6px;min-width:max-content;align-items:flex-end;padding:4px 2px 2px}
+
+/* Plain token */
+.tcol{display:flex;flex-direction:column;align-items:center;gap:3px;transition:opacity .25s}
+.tcol.dim{opacity:.12;pointer-events:none}
+.fhd{font-size:10px;color:var(--text3);text-align:center;min-width:72px;height:14px;display:flex;align-items:center;justify-content:center}
+.tok{padding:7px 10px 11px;border-radius:8px;border:0.5px solid transparent;font-size:13px;font-weight:500;text-align:center;min-width:72px;cursor:pointer;transition:all .2s;line-height:1.3;position:relative}
+.tok:hover{filter:brightness(.93)}
+.tok.sel{outline:2px solid #378ADD;outline-offset:2px}
+.tok::after{content:'';position:absolute;bottom:4px;left:12%;width:76%;height:3px;border-radius:2px;background:transparent}
+.tok.lcore::after{background:var(--lc-core)}
+.tok.lklammer::after{background:var(--lc-klammer)}
+.tok.lsub::after{background:var(--lc-sub)}
+.tok.ladv::after{background:var(--lc-adv)}
+.tsub{font-size:10px;font-weight:400;margin-top:2px;opacity:.7}
+
+/* ═══ CLAUSE BLOCK — expandable ═══ */
+.clause-col{display:flex;flex-direction:column;align-items:flex-start;gap:3px;transition:opacity .25s}
+.clause-col.dim{opacity:.12;pointer-events:none}
+.clause-header-field{font-size:10px;color:var(--text3);height:14px;display:flex;align-items:center;padding-left:2px}
+
+.clause-block{
+  border-radius:10px;border:1px solid var(--nf-bd);
+  background:var(--nf-bg);position:relative;
+  transition:all .3s;
+}
+/* collapsed state */
+.clause-block.collapsed{
+  padding:7px 36px 11px 10px;cursor:pointer;min-width:100px;
+}
+.clause-block.collapsed:hover{filter:brightness(.95)}
+.clause-block.collapsed::after{
+  content:'';position:absolute;bottom:4px;left:12%;width:76%;height:3px;
+  border-radius:2px;background:var(--lc-sub);
+}
+.clause-title{font-size:12px;font-weight:600;color:var(--nf-tx);white-space:nowrap}
+.clause-func{font-size:10px;color:var(--nf-tx);opacity:.75;margin-top:2px}
+.expand-btn{
+  position:absolute;top:6px;right:6px;
+  width:20px;height:20px;border-radius:50%;
+  border:0.5px solid var(--nf-bd);background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--nf-tx);transition:all .2s;flex-shrink:0;
+  font-weight:600;line-height:1;
+}
+.expand-btn:hover{background:var(--nf-bd);color:#fff}
+
+/* expanded state */
+.clause-block.expanded{
+  padding:8px 10px 10px;
+  border-color:var(--c-bd);
+  background:transparent;
+  min-width:0;
+}
+.clause-inner-label{
+  font-size:10px;font-weight:600;color:var(--c-tx);
+  letter-spacing:.06em;text-transform:uppercase;
+  margin-bottom:6px;padding-left:2px;
+}
+.clause-inner-row{
+  display:flex;gap:4px;min-width:max-content;align-items:flex-end;
+}
+/* inner tokens — same system, slightly smaller */
+.itcol{display:flex;flex-direction:column;align-items:center;gap:2px}
+.ifhd{font-size:9px;color:var(--text3);text-align:center;min-width:60px;height:13px;display:flex;align-items:center;justify-content:center}
+.itok{padding:5px 8px 9px;border-radius:6px;border:0.5px solid transparent;font-size:11px;font-weight:500;text-align:center;min-width:60px;cursor:pointer;transition:all .2s;line-height:1.3;position:relative}
+.itok:hover{filter:brightness(.93)}
+.itok.sel{outline:2px solid #378ADD;outline-offset:1px}
+.itok::after{content:'';position:absolute;bottom:3px;left:12%;width:76%;height:2px;border-radius:1px;background:transparent}
+.itok.lcore::after{background:var(--lc-core)}
+.itok.lklammer::after{background:var(--lc-klammer)}
+.itok.lsub::after{background:var(--lc-sub)}
+.itok.ladv::after{background:var(--lc-adv)}
+.itsub{font-size:9px;font-weight:400;margin-top:1px;opacity:.7}
+
+/* Field colors */
+.fVF{background:var(--vf-bg);border-color:var(--vf-bd);color:var(--vf-tx)}
+.fLSK,.fRSK{background:var(--lsk-bg);border-color:var(--lsk-bd);color:var(--lsk-tx)}
+.fMF{background:var(--mf-bg);border-color:var(--mf-bd);color:var(--mf-tx)}
+.fC,.fRel{background:var(--c-bg);border-color:var(--c-bd);color:var(--c-tx)}
+.fNF{background:var(--nf-bg);border-color:var(--nf-bd);color:var(--nf-tx)}
+.fNeg{background:var(--neg-bg);border-color:var(--neg-bd);color:var(--neg-tx)}
+.fNONE{background:var(--none-bg);border-color:var(--none-bd);color:var(--none-tx);font-size:16px}
+
+/* Layer controls */
+.layer-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
+.lbl{font-size:11px;color:var(--text3);white-space:nowrap}
+.lpill{padding:3px 12px;border-radius:20px;border:0.5px solid var(--border);font-size:11px;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s;display:flex;align-items:center;gap:4px}
+.lpill::before{content:'';width:8px;height:8px;border-radius:50%;background:transparent;transition:background .2s;flex-shrink:0}
+.lpill.on{border-color:var(--border2);color:var(--text);font-weight:500}
+.lpill.on[data-l=core]::before{background:var(--lc-core)}
+.lpill.on[data-l=klammer]::before{background:var(--lc-klammer)}
+.lpill.on[data-l=sub]::before{background:var(--lc-sub)}
+.lpill.on[data-l=adv]::before{background:var(--lc-adv)}
+.lpaux{padding:3px 12px;border-radius:20px;border:0.5px solid var(--border);font-size:11px;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s}
+.lpaux:hover{border-color:var(--border2);color:var(--text)}
+
+/* Legend */
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.lg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)}
+.lgd{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.lgs{width:20px;height:3px;border-radius:2px;flex-shrink:0}
+
+/* Info box */
+.infobox{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px 14px;margin-bottom:14px;min-height:56px}
+.iword{font-size:16px;font-weight:600;margin-bottom:5px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.chip{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);border:0.5px solid var(--border);color:var(--text2)}
+.idesc{font-size:13px;color:var(--text2);line-height:1.65}
+.hint{font-size:12px;color:var(--text3);font-style:italic}
+
+/* NF note banner */
+.nf-note{font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:6px 12px;margin-bottom:10px;line-height:1.6}
+
+/* ARC */
+.arc-wrap{padding:4px 0 0;margin-bottom:6px}
+#arc-svg{display:block;overflow:visible}
+#clause-arc-svg{display:block;overflow:visible}
+#clause-dep-wrap{transition:all .3s;border-radius:0 var(--rlg) var(--rlg) 0}
+
+/* ELIM */
+.elim-sent{font-size:15px;line-height:2.4;margin-bottom:12px;padding:12px 16px;background:var(--bg2);border-radius:var(--rlg);border:0.5px solid var(--border)}
+.etok{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:6px;border:0.5px solid var(--border2);cursor:pointer;margin:2px 3px;font-size:14px;font-weight:500;background:var(--bg);transition:all .2s}
+.etok:hover{filter:brightness(.95)}
+.etok.out{text-decoration:line-through;opacity:.28;background:var(--bg2);border-color:var(--border);cursor:pointer}
+.etok.fixed{cursor:default}.etok.fixed:hover{filter:none}
+.edot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.elim-info{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rlg);padding:12px 14px;min-height:56px;margin-bottom:10px}
+.elim-lg-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.elim-lg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.elim-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+.results{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rlg);padding:16px}
+
+/* Glossary */
+.gloss-wrap{margin-bottom:14px}
+.gloss-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);background:none;border:none;padding:0;margin-bottom:6px}
+.gloss-toggle:hover{color:var(--text)}
+.gloss-toggle .arrow{font-size:10px;transition:transform .2s;display:inline-block}
+.gloss-toggle.open .arrow{transform:rotate(90deg)}
+.gloss-panel{display:none;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.gloss-panel.visible{display:block}
+.gloss-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px 20px}
+.gloss-section h4{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px}
+.gloss-row{display:flex;align-items:baseline;gap:6px;margin-bottom:3px;font-size:12px}
+.gloss-code{font-weight:600;color:var(--text);min-width:52px;font-size:12px}
+.gloss-full{color:var(--text2)}
+.gloss-zh{color:var(--text3);font-size:11px}
+
+/* Tooltip on abbreviated labels */
+[data-tip]{position:relative;cursor:help}
+[data-tip]:hover::after{
+  content:attr(data-tip);
+  position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);
+  background:var(--text);color:var(--bg);font-size:11px;white-space:nowrap;
+  padding:3px 8px;border-radius:4px;pointer-events:none;z-index:100;font-weight:400;
+}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>德语句法分析器</h1>
+<p class="sub">德语句法分析工具 · 拓扑场 · 依存树 · 删除测试</p>
+
+<details class="api-setup" id="api-setup">
+  <summary>
+    <span style="font-size:14px">&#9881;</span> API 设置
+    <span id="key-ind" style="margin-left:auto;font-size:11px;color:var(--text3)">未配置</span>
+  </summary>
+  <div class="api-row">
+    <input type="password" id="api-key" placeholder="DeepSeek API Key: sk-..." autocomplete="off"/>
+    <button class="smb" onclick="saveKey()">保存</button>
+    <button class="smb" onclick="clearKey()">清除</button>
+  </div>
+  <div class="api-note">Key 仅保存在浏览器本地，不上传。获取：<a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--c-tx)">platform.deepseek.com/api_keys</a></div>
+  <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--text3)">API 端点</span>
+    <select id="api-endpoint" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);cursor:pointer" onchange="saveEndpoint()">
+      <option value="https://api.deepseek.com/chat/completions">DeepSeek 官方接口（本地运行）</option>
+      <option value="https://openrouter.ai/api/v1/chat/completions">OpenRouter（支持在线部署）</option>
+    </select>
+    <span style="font-size:11px;color:var(--text3)" id="endpoint-hint"></span>
+  </div>
+  <div class="api-note" style="margin-top:4px;color:#BA7517">⚠ 使用须知：请将此文件下载后在本地浏览器中打开（直接双击 HTML 文件），在线预览窗口无法调用 API。</div>
+  <div class="api-st" id="api-st"></div>
+</details>
+
+<div class="input-card">
+  <div class="input-row">
+    <textarea id="sent" rows="2" placeholder="输入德语句子…" style="flex:1;padding:9px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:14px;resize:vertical;line-height:1.5;font-family:inherit;min-height:44px"></textarea>
+    <button class="abtn" id="abtn" onclick="analyze()">分析</button>
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin-top:4px">请输入一个完整的德语句子，按 Ctrl+Enter 开始分析</div>
+</div>
+
+<div class="statusbar" id="statusbar"><span class="hint">输入德语句子，按 Ctrl+Enter 开始分析</span></div>
+
+<div id="results" style="display:none" class="results">
+  <div class="tabs">
+    <button class="tab active" onclick="setTab('topo',this)">拓扑场</button>
+    <button class="tab" onclick="setTab('dep',this)">依存树</button>
+    <button class="tab" onclick="setTab('elim',this)">删除测试</button>
+  </div>
+
+  <!-- TOPO TAB -->
+  <div id="tab-topo">
+    <div class="sechd">拓扑场结构</div>
+    <div class="gloss-wrap">
+      <button class="gloss-toggle" onclick="toggleGloss(this)"><span class="arrow">▶</span> 缩写对照表 — 场域 · 层级</button>
+      <div class="gloss-panel">
+        <div class="gloss-cols">
+          <div class="gloss-section">
+            <h4>拓扑场域（词块背景色）</h4>
+            <div class="gloss-row"><span class="gloss-code">VF</span><span class="gloss-full">前场</span><span class="gloss-zh">Vorfeld — 动词前唯一成分</span></div>
+            <div class="gloss-row"><span class="gloss-code">LSK</span><span class="gloss-full">左括号</span><span class="gloss-zh">Linke Satzklammer — 限定动词</span></div>
+            <div class="gloss-row"><span class="gloss-code">RSK</span><span class="gloss-full">右括号</span><span class="gloss-zh">Rechte Satzklammer — 过去分词/不定式</span></div>
+            <div class="gloss-row"><span class="gloss-code">MF</span><span class="gloss-full">中间场</span><span class="gloss-zh">Mittelfeld — 括号之间的成分</span></div>
+            <div class="gloss-row"><span class="gloss-code">C</span><span class="gloss-full">引导词位</span><span class="gloss-zh">Komplementierer — dass/weil/wenn 等</span></div>
+            <div class="gloss-row"><span class="gloss-code">Rel</span><span class="gloss-full">关系代词位</span><span class="gloss-zh">Relativpronomen — der/die/das 等</span></div>
+            <div class="gloss-row"><span class="gloss-code">NF</span><span class="gloss-full">后场</span><span class="gloss-zh">Nachfeld — 右括号之后，常为从句</span></div>
+            <div class="gloss-row"><span class="gloss-code">Neg</span><span class="gloss-full">否定词</span><span class="gloss-zh">Negation — nicht/kein 等</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>层级（词块底条颜色）</h4>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-core)">■ 核心</span><span class="gloss-zh">动词必须的论元，不可删除</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-klammer)">■ 括号</span><span class="gloss-zh">动词括号成分，句法必需</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-sub)">■ 从句</span><span class="gloss-zh">嵌套从句整体，可作为单元删除</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-adv)">■ 修饰</span><span class="gloss-zh">状语、修饰语，可自由删除</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>常见词性缩写（POS）</h4>
+            <div class="gloss-row"><span class="gloss-code">VVFIN</span><span class="gloss-zh">限定实义动词</span></div>
+            <div class="gloss-row"><span class="gloss-code">VAFIN</span><span class="gloss-zh">限定助动词（haben/sein/werden）</span></div>
+            <div class="gloss-row"><span class="gloss-code">VVPP</span><span class="gloss-zh">过去分词</span></div>
+            <div class="gloss-row"><span class="gloss-code">NN</span><span class="gloss-zh">普通名词</span></div>
+            <div class="gloss-row"><span class="gloss-code">NE</span><span class="gloss-zh">专有名词</span></div>
+            <div class="gloss-row"><span class="gloss-code">PPER</span><span class="gloss-zh">人称代词</span></div>
+            <div class="gloss-row"><span class="gloss-code">ART</span><span class="gloss-zh">冠词（定冠词/不定冠词）</span></div>
+            <div class="gloss-row"><span class="gloss-code">ADJA</span><span class="gloss-zh">修饰性形容词</span></div>
+            <div class="gloss-row"><span class="gloss-code">ADV</span><span class="gloss-zh">副词</span></div>
+            <div class="gloss-row"><span class="gloss-code">APPR</span><span class="gloss-zh">介词</span></div>
+            <div class="gloss-row"><span class="gloss-code">KOUS</span><span class="gloss-zh">从属连词（dass/weil/wenn）</span></div>
+            <div class="gloss-row"><span class="gloss-code">PRELS</span><span class="gloss-zh">关系代词</span></div>
+            <div class="gloss-row"><span class="gloss-code">PPOSAT</span><span class="gloss-zh">物主代词作定语（mein/dein）</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="nf-note" class="nf-note" style="display:none"></div>
+    <div class="topo-scroll"><div id="topo-row" class="topo-row"></div></div>
+    <div class="layer-bar">
+      <span class="lbl">层级显示</span>
+      <button class="lpill on" data-l="core"    onclick="toggleL(this)">核心论元</button>
+      <button class="lpill on" data-l="klammer" onclick="toggleL(this)">括号结构</button>
+      <button class="lpill on" data-l="sub"     onclick="toggleL(this)">从句成分</button>
+      <button class="lpill on" data-l="adv"     onclick="toggleL(this)">修饰语</button>
+      <button class="lpaux" onclick="allL(true)">全显</button>
+      <button class="lpaux" onclick="allL(false)">仅主干</button>
+    </div>
+    <div class="legend">
+      <span style="font-size:11px;color:var(--text3);margin-right:2px">场域（背景色）：</span>
+      <div class="lg"><div class="lgd" style="background:var(--vf-bg);border:0.5px solid var(--vf-bd)"></div>VF 前场</div>
+      <div class="lg"><div class="lgd" style="background:var(--lsk-bg);border:0.5px solid var(--lsk-bd)"></div>LSK/RSK 括号</div>
+      <div class="lg"><div class="lgd" style="background:var(--mf-bg);border:0.5px solid var(--mf-bd)"></div>MF 中间场</div>
+      <div class="lg"><div class="lgd" style="background:var(--c-bg);border:0.5px solid var(--c-bd)"></div>C/Rel 引导词</div>
+      <div class="lg"><div class="lgd" style="background:var(--nf-bg);border:0.5px solid var(--nf-bd)"></div>NF 后场（从句整体）</div>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px;margin-right:2px">层级（底条）：</span>
+      <div class="lg"><div class="lgs" style="background:var(--lc-core)"></div>核心</div>
+      <div class="lg"><div class="lgs" style="background:var(--lc-klammer)"></div>括号</div>
+      <div class="lg"><div class="lgs" style="background:var(--lc-sub)"></div>从句</div>
+      <div class="lg"><div class="lgs" style="background:var(--lc-adv)"></div>修饰</div>
+    </div>
+    <div class="infobox" id="topo-info"><div class="hint">点击任意词块查看详细信息；从句块右上角「+」可展开内部结构</div></div>
+    <details style="margin-top:8px">
+      <summary style="font-size:11px;color:var(--text3);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
+        场域与层级说明
+      </summary>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px" id="field-ref-table"></div>
+    </details>
+  </div>
+
+  <!-- DEP TAB -->
+  <div id="tab-dep" style="display:none">
+    <div class="sechd">依存句法树</div>
+    <div class="gloss-wrap">
+      <button class="gloss-toggle" onclick="toggleGloss(this)"><span class="arrow">▶</span> 依存关系标签说明</button>
+      <div class="gloss-panel">
+        <div class="gloss-cols">
+          <div class="gloss-section">
+            <h4>核心论元</h4>
+            <div class="gloss-row"><span class="gloss-code">ROOT</span><span class="gloss-full">根节点</span><span class="gloss-zh">句子的核心动词</span></div>
+            <div class="gloss-row"><span class="gloss-code">SB</span><span class="gloss-full">主语</span><span class="gloss-zh">Subjekt — 第一格名词短语</span></div>
+            <div class="gloss-row"><span class="gloss-code">OA</span><span class="gloss-full">直接宾语</span><span class="gloss-zh">Akkusativobjekt — 第四格</span></div>
+            <div class="gloss-row"><span class="gloss-code">DA</span><span class="gloss-full">间接宾语</span><span class="gloss-zh">Dativobjekt — 第三格</span></div>
+            <div class="gloss-row"><span class="gloss-code">PD</span><span class="gloss-full">表语</span><span class="gloss-zh">Prädikativ — sein/werden 后的第一格</span></div>
+            <div class="gloss-row"><span class="gloss-code">OBJ</span><span class="gloss-full">宾语从句</span><span class="gloss-zh">dass-Satz 等作宾语</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>修饰与附属</h4>
+            <div class="gloss-row"><span class="gloss-code">MO</span><span class="gloss-full">状语</span><span class="gloss-zh">Modalangabe — 时间/地点/方式等</span></div>
+            <div class="gloss-row"><span class="gloss-code">ADV</span><span class="gloss-full">副词修饰</span><span class="gloss-zh">副词作状语</span></div>
+            <div class="gloss-row"><span class="gloss-code">ATTR</span><span class="gloss-full">定语</span><span class="gloss-zh">Attribut — 修饰名词的成分</span></div>
+            <div class="gloss-row"><span class="gloss-code">NG</span><span class="gloss-full">否定成分</span><span class="gloss-zh">Negation — nicht/kein</span></div>
+            <div class="gloss-row"><span class="gloss-code">CP</span><span class="gloss-full">引导词</span><span class="gloss-zh">Komplementierer — 从属连词/关系代词</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>格（Kasus）</h4>
+            <div class="gloss-row"><span class="gloss-code">Nom</span><span class="gloss-full">第一格</span><span class="gloss-zh">Nominativ — 主语格</span></div>
+            <div class="gloss-row"><span class="gloss-code">Akk</span><span class="gloss-full">第四格</span><span class="gloss-zh">Akkusativ — 直接宾语格</span></div>
+            <div class="gloss-row"><span class="gloss-code">Dat</span><span class="gloss-full">第三格</span><span class="gloss-zh">Dativ — 间接宾语格</span></div>
+            <div class="gloss-row"><span class="gloss-code">Gen</span><span class="gloss-full">第二格</span><span class="gloss-zh">Genitiv — 属格/所有格</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>弧线图读法</h4>
+            <div class="gloss-row"><span class="gloss-zh" style="line-height:1.7">弧线从<strong>依附词</strong>指向<strong>核心词</strong>（箭头所指为核心）。弧越高表示两词距离越远。虚线为ROOT（句子根节点）。节点颜色与拓扑场层级一致。</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--text3)">缩放比例</span>
+      <input type="range" id="arc-zoom" min="50" max="150" value="100" step="5" style="width:100px" oninput="setArcZoom(this.value)"/>
+      <span style="font-size:11px;color:var(--text3);min-width:32px" id="arc-zoom-label">100%</span>
+      <button class="smb" style="font-size:11px;padding:3px 10px" onclick="setArcZoom(100)">还原</button>
+    </div>
+    <div class="arc-wrap" style="overflow-x:auto;overflow-y:hidden;cursor:grab;user-select:none;min-height:200px" id="arc-scroll">
+      <div id="arc-inner" style="transform-origin:top left;transition:transform .15s">
+        <svg id="arc-svg"></svg>
+      </div>
+    </div>
+    <div id="clause-dep-wrap" style="display:none;margin-top:6px;padding:10px 12px 10px 16px;border-left:2px solid var(--lc-sub);margin-left:4px;background:var(--bg2);border-radius:0 var(--r) var(--r) 0">
+      <div style="font-size:10px;font-weight:600;color:var(--lc-sub);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:6px">
+        <span id="clause-dep-title">从句内部结构</span>
+        <button onclick="closeClauseDep()" style="padding:1px 8px;border:0.5px solid var(--border2);border-radius:10px;font-size:11px;background:transparent;color:var(--text2);cursor:pointer">收起 ×</button>
+      </div>
+      <div class="arc-wrap"><svg id="clause-arc-svg"></svg></div>
+    </div>
+    <div class="infobox" id="dep-info"><div class="hint">点击节点查看详情；点击从句节点可在下方展开其内部依存树</div></div>
+    <details style="margin-top:8px">
+      <summary style="font-size:11px;color:var(--text3);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:4px">
+        缩写对照表（依存关系标签 &amp; 词性标签）
+      </summary>
+      <div id="abbrev-table" style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+    </details>
+  </div>
+
+  <!-- ELIM TAB -->
+  <div id="tab-elim" style="display:none">
+    <div class="sechd">删除测试</div>
+    <div class="gloss-wrap">
+      <button class="gloss-toggle" onclick="toggleGloss(this)"><span class="arrow">▶</span> 删除测试说明</button>
+      <div class="gloss-panel">
+        <div class="gloss-cols">
+          <div class="gloss-section">
+            <h4>什么是删除测试？</h4>
+            <div class="gloss-row"><span class="gloss-zh" style="line-height:1.7">删除测试（Eliminierungstest）是德语句法分析的基本方法：依次删除句子成分，检验句子是否仍然合法。<strong>不能删除</strong>的是句子的核心结构；<strong>可以删除</strong>的是修饰性或补充性成分。</span></div>
+          </div>
+          <div class="gloss-section">
+            <h4>各颜色点含义</h4>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-core)">●</span><span class="gloss-full">核心论元</span><span class="gloss-zh">动词的必须论元，删除后句子不合法</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-klammer)">●</span><span class="gloss-full">括号动词</span><span class="gloss-zh">动词括号组成部分，不可删除</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-sub)">●</span><span class="gloss-full">从句整体</span><span class="gloss-zh">点击整个从句同时删除/还原</span></div>
+            <div class="gloss-row"><span class="gloss-code" style="color:var(--lc-adv)">●</span><span class="gloss-full">修饰语</span><span class="gloss-zh">状语、副词等，删除后句子仍合法</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="elim-lg-row">
+      <div class="elim-lg"><div class="edot" style="background:var(--lc-core)"></div>核心论元 — 不可删</div>
+      <div class="elim-lg"><div class="edot" style="background:var(--lc-klammer)"></div>括号动词 — 不可删</div>
+      <div class="elim-lg"><div class="edot" style="background:var(--lc-sub)"></div>从句（NF）— 整体可删</div>
+      <div class="elim-lg"><div class="edot" style="background:var(--lc-adv)"></div>修饰语 — 可删</div>
+    </div>
+    <div class="elim-sent" id="elim-sent"></div>
+    <div class="elim-info" id="elim-info"><div class="hint">点击任意词块，测试该成分是否可以删除</div></div>
+    <div class="elim-actions">
+      <button class="smb" onclick="resetElim()">全部还原</button>
+      <button class="smb" onclick="doElim('adv')">删除修饰语</button>
+      <button class="smb" onclick="doElim('sub')">删除从句</button>
+      <button class="smb" onclick="showCore()">最小主干</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const EXS=[
+  "Ich esse Brot.",
+  "Ich esse Brot, wenn ich Hunger habe.",
+  "Ich habe das Brot gegessen, weil ich Hunger hatte.",
+  "Das ist das Brot, das ich jeden Tag esse.",
+  "Dass ich das Brot schon weggegessen habe, wusste meine Mutter nicht.",
+  "Ich habe meiner Mutter erzählt, dass ich das Brot schon gegessen habe.",
+  "Gestern habe ich in der Küche einen schönen grünen Apfel gegessen, der meiner Mutter gehört hat."
+];
+
+const SYS=`Du bist Experte für deutsche Syntax. Analysiere den Satz. Gib AUSSCHLIESSLICH gültiges JSON zurück – kein Text, keine Backticks.
+
+KONZEPT DER ZWEI EBENEN:
+1. HAUPTSATZ-EBENE (main_tokens): Tokens des Hauptsatzes + eventuelle Nebensätze als je EIN Clause-Block.
+2. NEBENSATZ-INTERNE EBENE (clause_tokens innerhalb jedes clause_block): Die interne Topologie des Nebensatzes.
+
+TOKENISIERUNG der main_tokens: Fasse syntaktische Phrasen als ein Token zusammen (z.B. "in der Küche"→1, "einen schönen grünen Apfel"→1, "meiner Mutter"→1). Satzzeichen sind eigene Token. Nebensätze (Relativ-, Adverbial-, Subjekt-, Objektsätze) erscheinen als clause_block-Objekte, NICHT als einzelne Token.
+
+JSON-Schema:
+{
+  "sentence": "...",
+  "main_tokens": [
+    {
+      "type": "token",
+      "id": 0,
+      "word": "...",
+      "field": "VF|LSK|RSK|MF|NF|Neg|NONE",
+      "layer": "core|klammer|adv",
+      "pos": "...",
+      "role": "...",
+      "case": "Nom|Akk|Dat|Gen|-",
+      "deletable": true,
+      "delete_reason": "用中文，最多15字，说明为何可/不可删",
+      "info": "用中文，最多20字，说明句法功能"
+    },
+    {
+      "type": "clause_block",
+      "id": 10,
+      "clause_type": "关系从句|状语从句|主语从句|宾语从句",
+      "function": "用中文说明从句功能，如：修饰'Apfel'的关系从句（后场）",
+      "main_field": "NF|VF|MF",
+      "layer": "sub",
+      "deletable": true,
+      "delete_reason": "用中文，最多20字",
+      "clause_tokens": [
+        {
+          "id": 11,
+          "word": "...",
+          "field": "C|Rel|MF|LSK|RSK|VF",
+          "layer": "core|klammer|adv|sub",
+          "pos": "...",
+          "role": "...",
+          "case": "Nom|Akk|Dat|Gen|-",
+          "info": "用中文，最多15字"
+        }
+      ],
+      "clause_arcs": [
+        {"f": 11, "t": -1, "l": "ROOT"},
+        {"f": 12, "t": 11, "l": "SB|OA|DA|MO|ATTR|CP"}
+      ]
+    }
+  ],
+  "arcs": [
+    {"f": 0, "t": -1, "l": "ROOT"},
+    {"f": 1, "t": 0, "l": "SB|OA|DA|MO|PD|OBJ|ATTR|CP|NG|ADV"}
+  ],
+  "nf_note": "用中文说明：哪些成分位于后场，为何出括号外？"
+}
+
+Regeln:
+- Nebensätze immer als clause_block (nicht als einzelne Token in main_tokens).
+- main_field eines clause_block: NF ONLY wenn der Nebensatz NACH der rechten Klammer (RSK) des Hauptsatzes steht (Ausklammerung). MF wenn der Nebensatz im Mittelfeld eingebettet ist (z.B. Relativsatz, der direkt auf sein Bezugsnomen im MF folgt und das Bezugsnomen noch VOR der RSK steht). VF wenn er das Vorfeld belegt (z.B. Subjektsatz am Satzanfang).
+- clause_tokens: alle internen Token des Nebensatzes. Der Komplementierer/Relativpronomen trägt field=C bzw. field=Rel. Interne Verbklammer trägt field=LSK/RSK.
+- clause_arcs: Dependenzrelationen INNERHALB des Nebensatzes. IDs beziehen sich auf clause_tokens. Der Kopf (finites Verb) hat t=-1 (ROOT des Nebensatzes). Gleiche Labelkonventionen wie bei arcs.
+- layer in main_tokens: nur "core", "klammer", "adv" (kein "sub" — Nebensätze sind ja clause_blocks).
+- arcs: alle Token-ids referenzieren Haupt- UND Nebensatz-Token gemeinsam. clause_block selbst hat eine arc-Verbindung zu seinem Kopf.
+- nf_note: nur wenn NF-Elemente vorhanden.
+- Für jeden main_token vom type="token" der eine PHRASE ist (mehrere Wörter), füge ein "phrase_analysis"-Array hinzu. Markiere das strukturelle Kopfnomen/-verb mit is_core:true (genau eines pro Phrase). Für Einzelwörter lasse phrase_analysis weg.
+- WICHTIG: Alle Textfelder (role, function, info, delete_reason, nf_note, phrase_analysis.role, phrase_analysis.info) MÜSSEN auf Chinesisch sein. Keine deutschen Wörter in diesen Feldern.
+- role-Beispiele auf Chinesisch: 主语、直接宾语（第四格）、间接宾语（第三格）、谓语动词、助动词、过去分词、表语、定语、时间状语、地点状语、方式状语、从属连词、关系代词、否定词、限定词、副词修饰语
+- pos bleibt als Abkürzung (VVFIN, NN usw.) — diese werden in der App übersetzt.
+- Nur JSON zurückgeben.`;
+
+let DATA=null, activeLayers=new Set(["core","klammer","sub","adv"]), eliminated=new Set(), curTab='topo', expandedClauses=new Set();
+
+function saveKey(){const k=document.getElementById('api-key').value.trim();if(!k)return;localStorage.setItem('dsk3',k);document.getElementById('api-key').value='';setSt2('ok','已保存');setInd(true);}
+function clearKey(){localStorage.removeItem('dsk3');document.getElementById('api-key').value='';setSt2('','');setInd(false);}
+function saveEndpoint(){
+  const v=document.getElementById('api-endpoint').value;
+  localStorage.setItem('dsk3_ep',v);
+  updateEndpointHint(v);
+}
+function getEndpoint(){return localStorage.getItem('dsk3_ep')||'https://api.deepseek.com/chat/completions';}
+function updateEndpointHint(v){
+  const el=document.getElementById('endpoint-hint');if(!el)return;
+  if(v.includes('openrouter'))el.textContent='使用 OpenRouter：填入 OpenRouter 的 API Key（格式 sk-or-...）';
+  else el.textContent='';
+}
+function setSt2(c,m){const e=document.getElementById('api-st');e.className='api-st'+(c?' '+c:'');e.textContent=m;}
+function setInd(on){const e=document.getElementById('key-ind');e.textContent=on?'已配置':'未配置';e.style.color=on?'#1D9E75':'';}
+function getKey(){return localStorage.getItem('dsk3')||'';}
+function setStatus(loading,msg,err){
+  const e=document.getElementById('statusbar');
+  e.className='statusbar'+(err?' err':'');
+  e.innerHTML=loading?`<div class="spin"></div><span>${msg}</span>`:`<span>${msg||''}</span>`;
+}
+
+async function analyze(){
+  const sent=document.getElementById('sent').value.trim();
+  if(!sent)return;
+  const key=getKey();
+  if(!key){setStatus(false,'请先配置 DeepSeek API Key',true);document.getElementById('api-setup').open=true;return;}
+  document.getElementById('abtn').disabled=true;
+  setStatus(true,'正在分析…');
+  document.getElementById('results').style.display='none';
+  DATA=null;eliminated=new Set();expandedClauses=new Set();
+  try{
+    const ep=getEndpoint();
+    // Use proxy endpoint when deployed to Vercel; fall back to direct when local
+    const useProxy=!window.location.protocol.startsWith('file');
+    const fetchUrl=useProxy?'/api/analyze':ep;
+    const r=await fetch(fetchUrl,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',
+        ...(useProxy?{'X-Api-Key':key}:{'Authorization':'Bearer '+key,
+          ...(ep.includes('openrouter')?{'HTTP-Referer':location.origin,'X-Title':'Deutscher Satzanalysator'}:{})
+        })
+      },
+      body:JSON.stringify({
+        model:ep.includes('openrouter')?'deepseek/deepseek-chat':'deepseek-chat',
+        max_tokens:4000,temperature:0.1,
+        messages:[{role:'system',content:SYS},{role:'user',content:'Analysiere: '+sent}],
+        endpoint:ep
+      })
+    });
+    if(!r.ok){
+      let emsg=r.status+' '+r.statusText;
+      try{const e=await r.json();emsg=e.error?.message||emsg;}catch(x){}
+      throw new Error(emsg);
+    }
+    const d=await r.json();
+    const choice=d.choices?.[0];
+    if(choice?.finish_reason==='length')throw new Error('输出被截断，请用更短的句子。');
+    const raw=(choice?.message?.content||'').replace(/```json|```/g,'').trim();
+    try{DATA=JSON.parse(raw);}catch(pe){throw new Error('JSON解析失败: '+pe.message.slice(0,60));}
+    setStatus(false,'');
+    document.getElementById('results').style.display='';
+    renderTopo();
+    if(curTab==='dep')renderDep();
+    if(curTab==='elim')renderElim();
+  }catch(e){
+    const msg=e.message||String(e);
+    let hint='';
+    if(msg.includes('fetch')||msg.includes('network')||msg.includes('Failed')){
+      hint='<br><span style="font-size:11px">提示：请确认①在本地浏览器打开此文件（非 claude.ai）②网络能访问 api.deepseek.com ③API Key 正确</span>';
+    } else if(msg.includes('401')||msg.includes('Unauthorized')){
+      hint='<br><span style="font-size:11px">提示：API Key 无效或已过期，请重新获取</span>';
+    } else if(msg.includes('429')){
+      hint='<br><span style="font-size:11px">提示：请求太频繁，稍等几秒再试</span>';
+    } else if(msg.includes('截断')||msg.includes('length')){
+      hint='<br><span style="font-size:11px">提示：句子过长，请尝试拆分为更短的句子</span>';
+    }
+    setStatus(false,'分析失败：'+msg+hint,true);
+  }
+  document.getElementById('abtn').disabled=false;
+}
+
+function setTab(t,btn){
+  curTab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  ['topo','dep','elim'].forEach(id=>document.getElementById('tab-'+id).style.display=id===t?'':'none');
+  if(t==='dep'&&DATA)renderDep();
+  if(t==='elim'&&DATA)renderElim();
+}
+
+function toggleL(btn){
+  const l=btn.dataset.l;
+  activeLayers.has(l)?activeLayers.delete(l):activeLayers.add(l);
+  btn.classList.toggle('on',activeLayers.has(l));
+  renderTopo();
+}
+function allL(on){
+  if(on){['core','klammer','sub','adv'].forEach(l=>activeLayers.add(l));}
+  else{activeLayers=new Set(['core','klammer']);}
+  document.querySelectorAll('.lpill[data-l]').forEach(b=>b.classList.toggle('on',activeLayers.has(b.dataset.l)));
+  renderTopo();
+}
+
+const FCLS={VF:'fVF',LSK:'fLSK',RSK:'fRSK',MF:'fMF',C:'fC',Rel:'fRel',NF:'fNF',Neg:'fNeg',NONE:'fNONE'};
+const LCLS={core:'lcore',klammer:'lklammer',sub:'lsub',adv:'ladv'};
+const POS_ZH={
+  'VVFIN':'限定实义动词','VAFIN':'限定助动词','VVPP':'过去分词','VVINF':'不定式',
+  'VAIMP':'命令式','VMFIN':'情态动词','NN':'名词','NE':'专有名词',
+  'PPER':'人称代词','PRF':'反身代词','PPOSS':'物主代词','PRELS':'关系代词',
+  'PDAT':'指示代词（第三格）','PIAT':'不定代词','PDS':'指示代词',
+  'ART':'冠词','APPR':'介词','APPRART':'介词+冠词缩合',
+  'ADJA':'修饰性形容词','ADJD':'谓语形容词','ADV':'副词',
+  'KOUS':'从属连词','KON':'并列连词','KOUI':'zu-不定式连词',
+  'CARD':'数词','ITJ':'感叹词','PPOSAT':'物主限定词',
+  'PP':'介词短语','NP':'名词短语','VP':'动词短语',
+  'APPO':'后置介词','APZR':'介词（右侧）',
+};
+function posZh(p){return POS_ZH[p]||p;}
+
+function abbrevRole(r){
+  if(!r)return'';
+  // Shorten common role descriptions to fit under arc nodes
+  const map={
+    '主语':'主语','直接宾语（第四格）':'宾语(Akk)',
+    '间接宾语（第三格）':'宾语(Dat)','谓语动词':'谓语',
+    '限定动词':'谓语','助动词':'助动词','过去分词':'分词',
+    '表语':'表语','定语':'定语','时间状语':'时间状','地点状语':'地点状',
+    '方式状语':'方式状','否定词':'否定','从属连词':'从属连','关系代词':'关系代词',
+    '限定词':'限定词','副词':'副词',
+  };
+  if(map[r])return map[r];
+  // truncate long strings
+  return r.length>8?r.slice(0,7)+'…':r;
+}
+
+const CTYPES={'Relativsatz':'关系从句','Adverbialsatz':'状语从句','Subjektsatz':'主语从句','Objektsatz':'宾语从句'};
+const FIELDNAMES={NF:'后场 NF',VF:'前场 VF',MF:'中间场 MF'};
+
+function renderTopo(){
+  if(!DATA||!DATA.main_tokens)return;
+  const row=document.getElementById('topo-row');
+  row.innerHTML='';
+
+  // NF note
+  const nfNote=document.getElementById('nf-note');
+  if(DATA.nf_note){nfNote.style.display='';nfNote.innerHTML=`<strong>后场说明：</strong>${esc(DATA.nf_note)}`;}
+  else nfNote.style.display='none';
+
+  DATA.main_tokens.forEach(item=>{
+    if(item.type==='token'&&item.field==='NONE')return;
+    if(item.type==='token'){
+      // determine visibility
+      const vis=activeLayers.has(item.layer);
+      const col=document.createElement('div');
+      col.className='tcol'+(vis?'':' dim');
+      const hd=document.createElement('div');
+      hd.className='fhd';
+      const FTIPS={'VF':'前场（动词前位置）','LSK':'左括号（限定动词）','RSK':'右括号（过去分词等）','MF':'中间场','C':'引导词位','Rel':'关系代词位','NF':'后场（括号外）','Neg':'否定词位'};
+      hd.textContent=item.field==='NONE'?'':item.field;
+      if(FTIPS[item.field]){hd.setAttribute('data-tip',FTIPS[item.field]);hd.style.cursor='help';}
+      const tok=document.createElement('div');
+      tok.className=`tok ${FCLS[item.field]||'fNONE'} ${LCLS[item.layer]||''}`;
+      tok.innerHTML=`${esc(item.word)}<div class="tsub">${esc(item.role)}</div>`;
+      tok.onclick=()=>showTopoInfo(item,tok);
+      col.appendChild(hd); col.appendChild(tok); row.appendChild(col);
+
+    } else if(item.type==='clause_block'){
+      const vis=activeLayers.has('sub');
+      const col=document.createElement('div');
+      col.className='clause-col'+(vis?'':' dim');
+
+      const hd=document.createElement('div');
+      hd.className='clause-header-field';
+      hd.textContent=item.main_field||'NF';
+
+      const block=document.createElement('div');
+      const isExpanded=expandedClauses.has(item.id);
+      block.className='clause-block '+(isExpanded?'expanded':'collapsed');
+      block.dataset.id=item.id;
+
+      if(!isExpanded){
+        // Collapsed: show clause type + function summary
+        const typeLabel=item.clause_type||'从句';
+        const preview=item.clause_tokens?item.clause_tokens.map(t=>t.word).join(' '):'…';
+        block.innerHTML=`
+          <div class="clause-title">${esc(typeLabel)}</div>
+          <div class="clause-func">${esc(item.function)}</div>
+          <button class="expand-btn" title="展开从句内部框架" onclick="toggleClause(${item.id},event)">+</button>`;
+        block.onclick=(e)=>{if(!e.target.classList.contains('expand-btn'))showClauseInfo(item);};
+      } else {
+        // Expanded: show internal topo
+        block.innerHTML=buildInnerTopo(item);
+      }
+
+      col.appendChild(hd); col.appendChild(block); row.appendChild(col);
+    }
+  });
+}
+
+function buildInnerTopo(cb){
+  let html=`<div class="clause-inner-label">${esc(cb.clause_type||'从句')} — 内部框架</div>`;
+  html+=`<div class="clause-inner-row">`;
+  (cb.clause_tokens||[]).forEach(t=>{
+    html+=`<div class="itcol">
+      <div class="ifhd">${t.field==='NONE'?'':esc(t.field)}</div>
+      <div class="itok ${FCLS[t.field]||'fNONE'} ${LCLS[t.layer]||''}" onclick="showInnerInfo(${cb.id},${t.id},event)">
+        ${esc(t.word)}<div class="itsub">${esc(t.role)}</div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  html+=`<button class="expand-btn" style="top:6px;right:6px;position:absolute" title="收起" onclick="toggleClause(${cb.id},event)">− 收起</button>`;
+  return html;
+}
+
+function toggleClause(id,e){
+  e.stopPropagation();
+  expandedClauses.has(id)?expandedClauses.delete(id):expandedClauses.add(id);
+  renderTopo();
+}
+
+function showClauseInfo(cb){
+  const LN={NF:'后场（Nachfeld）— 已出括号外',VF:'前场（Vorfeld）',MF:'中间场（Mittelfeld）'};
+  document.getElementById('topo-info').innerHTML=`
+    <div class="iword">${esc(cb.clause_type||'从句')}</div>
+    <div class="chips">
+      <span class="chip">${esc(LN[cb.main_field]||cb.main_field||'NF')}</span>
+      <span class="chip">从句成分（整体可删）</span>
+      <span class="chip" style="color:#1D9E75">可删除</span>
+    </div>
+    <div class="idesc">${esc(cb.function)}<br><span style="color:var(--text3);font-size:12px">点击右上角 + 展开从句内部框架</span></div>`;
+}
+
+function showInnerInfo(cbId,tokId,e){
+  e.stopPropagation();
+  const cb=DATA.main_tokens.find(x=>x.id===cbId);
+  if(!cb||!cb.clause_tokens)return;
+  const t=cb.clause_tokens.find(x=>x.id===tokId);
+  if(!t)return;
+  const LN={core:'核心论元',klammer:'括号结构',sub:'嵌套从句',adv:'修饰语'};
+  document.getElementById('topo-info').innerHTML=`
+    <div class="iword">${esc(t.word)} <span style="font-size:13px;color:var(--text2);font-weight:400">（${esc(cb.clause_type||"从句")}内部）</span></div>
+    <div class="chips">
+      <span class="chip" title="${esc(t.pos)}">${esc(posZh(t.pos))}</span><span class="chip">${esc(t.role)}</span>
+      ${t.case&&t.case!=='-'?`<span class="chip">${t.case}</span>`:''}
+      <span class="chip">场域: ${t.field}</span><span class="chip">${LN[t.layer]||t.layer}</span>
+    </div>
+    <div class="idesc">${esc(t.info)}</div>`;
+}
+
+function showTopoInfo(t,el){
+  document.querySelectorAll('.tok').forEach(e=>e.classList.remove('sel'));
+  el&&el.classList.add('sel');
+  const LN={core:'核心论元（不可删）',klammer:'括号结构',adv:'修饰语（可删）'};
+  document.getElementById('topo-info').innerHTML=`
+    <div class="iword">${esc(t.word)}</div>
+    <div class="chips">
+      <span class="chip" title="${esc(t.pos)}">${esc(posZh(t.pos))}</span><span class="chip">${esc(t.role)}</span>
+      ${t.case&&t.case!=='-'?`<span class="chip">${t.case}</span>`:''}
+      <span class="chip">场域: ${t.field}</span><span class="chip">${LN[t.layer]||t.layer}</span>
+      <span class="chip" style="color:${t.deletable?'#1D9E75':'#D85A30'}">${t.deletable?'可删除':'不可删除'}</span>
+    </div>
+    <div class="idesc">${esc(t.info)}${t.delete_reason?`<br><span style="color:var(--text3);font-size:12px">删除测试：${esc(t.delete_reason)}</span>`:''}</div>
+    ${phraseTable(t)}`;
+}
+
+function phraseTable(t){
+  if(!t.phrase_analysis||!t.phrase_analysis.length)return'';
+  // identify core: NN/NE/VVFIN or role contains 核心 or Kern
+  const isCore=p=>/(^NN|^NE|^VVFIN|^VAFIN)/.test(p.pos)||/核心|Kern|Kopf/.test(p.role||'')||p.is_core;
+  const cores=t.phrase_analysis.filter(isCore);
+  const coreWord=cores.length?cores[0].word:'';
+
+  // core banner
+  let coreBanner='';
+  if(coreWord){
+    coreBanner=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:#E1F5EE;border-radius:6px;border:0.5px solid #5DCAA5">
+      <span style="font-size:11px;color:#085041;font-weight:600;text-transform:uppercase;letter-spacing:.04em">核心词</span>
+      <span style="font-size:16px;font-weight:600;color:#04342C">${esc(coreWord)}</span>
+      ${cores[0].case&&cores[0].case!=='-'?`<span style="font-size:11px;color:#085041;background:#9FE1CB;padding:1px 7px;border-radius:10px">${esc(cores[0].case)}</span>`:''}
+      <span style="font-size:11px;color:#0F6E56">${esc(cores[0].role||'')}</span>
+    </div>`;
+  }
+
+  // group: core → close modifiers → far modifiers
+  const rows=t.phrase_analysis.map(p=>{
+    const core=isCore(p);
+    const bg=core?'background:#E1F5EE;':'';
+    const fw=core?'font-weight:600;':'';
+    const tc=core?'color:#04342C;':'color:var(--text);';
+    const stc=core?'color:#085041;':'color:var(--text2);';
+    return `<tr style="${bg}">
+      <td style="padding:4px 8px 4px 6px;font-size:12px;white-space:nowrap;${fw}${tc}border-radius:4px 0 0 4px">${esc(p.word)}</td>
+      <td style="padding:4px 6px;font-size:11px;${stc}" title="${esc(p.pos)}">${esc(posZh(p.pos))}</td>
+      <td style="padding:4px 6px;font-size:11px;${stc}">${esc(p.role)}</td>
+      <td style="padding:4px 6px;font-size:11px;${stc}">${p.case&&p.case!=='-'?esc(p.case):''}</td>
+      <td style="padding:4px 0 4px 4px;font-size:11px;color:var(--text3)">${esc(p.info||'')}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div style="margin-top:8px;border-top:0.5px solid var(--border);padding-top:10px">
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">短语结构 — 先找核心词，再看修饰成分</div>
+    ${coreBanner}
+    <table style="border-collapse:collapse;width:100%;border-radius:6px;overflow:hidden"><tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+/* ═══ ARC DIAGRAM ═══ */
+function renderDep(){
+  if(!DATA)return;
+  // flatten all tokens (main + clause internal) for arc rendering
+  const allToks=[];
+  (DATA.main_tokens||[]).forEach(item=>{
+    if(item.type==='token'&&item.field==='NONE') return;
+    if(item.type==='token') allToks.push({...item,_inner:false});
+    else if(item.type==='clause_block'){
+      // represent clause_block as a single node
+      const preview=(item.clause_tokens||[]).map(t=>t.word).join(' ');
+      allToks.push({id:item.id,word:item.clause_type||'从句',
+        role:item.function,layer:'sub',field:item.main_field||'NF',
+        info:item.function,_inner:false,_isClause:true,_cb:item});
+    }
+  });
+
+  const PAD=24,GAP=10,NH=32,BASELINE=160,SW=t=>Math.max(t.word.length*8+18,62);
+  let x=PAD; const xs=[],ws=[];
+  allToks.forEach(t=>{const w=SW(t);xs.push(x);ws.push(w);x+=w+GAP;});
+  const TW=x-GAP+PAD, SH=BASELINE+NH+44;
+
+  const LBGS={core:'#E1F5EE',klammer:'#EEEDFE',sub:'#E6F1FB',adv:'#FAEEDA'};
+  const LBDS={core:'#1D9E75',klammer:'#7F77DD',sub:'#378ADD',adv:'#BA7517'};
+  const LTCS={core:'#04342C',klammer:'#26215C',sub:'#042C53',adv:'#412402'};
+
+  const svg=document.getElementById('arc-svg');
+  svg.setAttribute('viewBox',`0 0 ${TW} ${SH}`);
+  svg.setAttribute('width','100%');
+  svg.style.minHeight=SH+'px';
+  svg.setAttribute('height',SH);
+
+  const idx={};
+  allToks.forEach((t,i)=>idx[t.id]=i);
+
+  let html=`<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 2L9 5L1 8" fill="none" stroke="#B4B2A9" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>`;
+
+  (DATA.arcs||[]).forEach(a=>{
+    if(a.t<0){
+      const fi=idx[a.f];if(fi===undefined)return;
+      const cx=xs[fi]+ws[fi]/2;
+      html+=`<line x1="${cx}" y1="${BASELINE}" x2="${cx}" y2="14" stroke="#D3D1C7" stroke-width="0.8" stroke-dasharray="3 2"/>`;
+      html+=`<text x="${cx}" y="11" text-anchor="middle" font-size="10" fill="#B4B2A9" font-family="-apple-system,sans-serif">ROOT</text>`;
+      return;
+    }
+    const fi=idx[a.f],ti=idx[a.t];
+    if(fi===undefined||ti===undefined)return;
+    const x1=xs[fi]+ws[fi]/2,x2=xs[ti]+ws[ti]/2;
+    const dist=Math.abs(fi-ti);
+    const arcH=Math.min(18+dist*24,128);
+    const mx=(x1+x2)/2,cy=BASELINE-arcH;
+    html+=`<path d="M${x1},${BASELINE} Q${mx},${cy} ${x2},${BASELINE}" fill="none" stroke="#C8C5BB" stroke-width="0.9" marker-end="url(#ah)"/>`;
+    const depZh={'ROOT':'根节点','SB':'主语','OA':'直接宾语','DA':'间接宾语','MO':'状语','PD':'表语','OBJ':'宾语从句','ATTR':'定语','CP':'引导词','NG':'否定','ADV':'副词修饰'};
+    const lZh=depZh[a.l]?a.l+'\n'+depZh[a.l]:a.l;
+    html+=`<text x="${mx}" y="${cy-4}" text-anchor="middle" font-size="10" fill="#A0A09A" font-family="-apple-system,sans-serif"><title>${esc(lZh)}</title>${esc(a.l)}</text>`;
+  });
+
+  allToks.forEach((t,i)=>{
+    const nx=xs[i],nw=ws[i];
+    const bg=LBGS[t.layer]||'#F1EFE8';
+    const bd=LBDS[t.layer]||'#B4B2A9';
+    const tc=LTCS[t.layer]||'#444441';
+    const stroke=t._isClause?`stroke-width="1.5" stroke-dasharray="4 2"`:`stroke-width="0.5"`;
+    html+=`<g style="cursor:pointer" onclick="depClick(${t.id})">
+      <rect x="${nx}" y="${BASELINE}" width="${nw}" height="${NH}" rx="6" fill="${bg}" stroke="${bd}" ${stroke}/>
+      <text x="${nx+nw/2}" y="${BASELINE+NH/2+1}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500" fill="${tc}" font-family="-apple-system,sans-serif">${esc(t.word)}</text>
+      <text x="${nx+nw/2}" y="${BASELINE+NH+14}" text-anchor="middle" font-size="10" fill="#888780" font-family="-apple-system,sans-serif"><title>${esc(t.role)}</title>${esc(abbrevRole(t.role))}</text>
+    </g>`;
+  });
+  svg.innerHTML=html;
+  // apply current zoom after render
+  setTimeout(()=>setArcZoom(arcZoom),0);
+}
+
+function depClick(id){
+  if(!DATA)return;
+  let t=null, isClause=false, cb=null;
+  for(const item of DATA.main_tokens||[]){
+    if(item.type==='token'&&item.id===id){t=item;break;}
+    if(item.type==='clause_block'&&item.id===id){
+      cb=item; isClause=true;
+      t={...item,word:item.clause_type||'从句',pos:'从句',role:item.function,layer:'sub',info:item.function};
+      break;
+    }
+  }
+  if(!t)return;
+  const out=(DATA.arcs||[]).filter(a=>a.f===id);
+  const inc=(DATA.arcs||[]).filter(a=>a.t===id);
+  const idMap={};
+  (DATA.main_tokens||[]).forEach(item=>{
+    if(item.type==='token') idMap[item.id]=item.word;
+    else if(item.type==='clause_block') idMap[item.id]=item.clause_type||'从句';
+  });
+  let chips='';
+  inc.forEach(a=>{if(idMap[a.f])chips+=`<span class="chip">依附于: ${esc(idMap[a.f])} (${a.l})</span>`;});
+  out.forEach(a=>{if(a.t<0)chips+=`<span class="chip">ROOT</span>`;else if(idMap[a.t])chips+=`<span class="chip">→ ${esc(idMap[a.t])} (${a.l})</span>`;});
+
+  // if clause node clicked: render inner arc diagram
+  if(isClause&&cb&&cb.clause_tokens&&cb.clause_tokens.length>0){
+    renderClauseDep(cb);
+    chips+=`<span class="chip" style="color:var(--lc-sub);border-color:var(--lc-sub)">已展开内部依存树 ↓</span>`;
+  }
+
+  document.getElementById('dep-info').innerHTML=`
+    <div class="iword">${esc(t.word)} <span style="font-size:13px;font-weight:400;color:var(--text2)">${isClause?'（从句整体 — 见下方内部结构）':''}</span></div>
+    <div class="chips">${t.pos?`<span class="chip" title="${esc(t.pos)}">${esc(posZh(t.pos))}</span>`:''}<span class="chip">${esc(t.role)}</span>${chips}</div>
+    <div class="idesc">${esc(t.info||'')}</div>`;
+}
+
+function closeClauseDep(){
+  document.getElementById('clause-dep-wrap').style.display='none';
+}
+
+let arcZoom=100;
+function setArcZoom(v){
+  arcZoom=parseInt(v);
+  document.getElementById('arc-zoom-label').textContent=arcZoom+'%';
+  document.getElementById('arc-zoom').value=arcZoom;
+  const inner=document.getElementById('arc-inner');
+  if(inner) inner.style.transform=`scale(${arcZoom/100})`;
+  // adjust container height to match scaled content
+  const svg=document.getElementById('arc-svg');
+  const wrap=document.getElementById('arc-scroll');
+  if(svg&&wrap){
+    const h=parseInt(svg.getAttribute('height')||svg.style.minHeight||200);
+    wrap.style.height=(h*arcZoom/100+20)+'px';
+  }
+}
+
+// drag-to-scroll on arc
+(function(){
+  let dragging=false,sx=0,sl=0;
+  document.addEventListener('mousedown',e=>{
+    const el=e.target.closest('#arc-scroll');
+    if(!el)return;
+    dragging=true;sx=e.clientX;sl=el.scrollLeft;
+    el.style.cursor='grabbing';
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const el=document.getElementById('arc-scroll');
+    if(el){el.scrollLeft=sl-(e.clientX-sx);}
+  });
+  document.addEventListener('mouseup',()=>{
+    dragging=false;
+    const el=document.getElementById('arc-scroll');
+    if(el)el.style.cursor='grab';
+  });
+})();
+
+function renderClauseDep(cb){
+  const wrap=document.getElementById('clause-dep-wrap');
+  const titleEl=document.getElementById('clause-dep-title');
+  titleEl.textContent='从句内部依存结构：'+(cb.clause_type||'从句');
+  wrap.style.display='block';
+
+  const toks=cb.clause_tokens||[];
+  const N=toks.length;
+  if(!N){wrap.style.display='none';return;}
+
+  // build internal arcs from clause_tokens if clause_arcs provided, else skip arcs
+  const carcs=cb.clause_arcs||[];
+
+  const PAD=12,GAP=6,NH=22,BASELINE=80,SW=t=>Math.max(t.word.length*6.5+12,42);
+  let x=PAD; const xs=[],ws=[];
+  toks.forEach(t=>{const w=SW(t);xs.push(x);ws.push(w);x+=w+GAP;});
+  const TW=x-GAP+PAD, SH=BASELINE+NH+36;
+
+  const LBGS={core:'#E1F5EE',klammer:'#EEEDFE',sub:'#E6F1FB',adv:'#FAEEDA',NONE:'#F1EFE8'};
+  const LBDS={core:'#1D9E75',klammer:'#7F77DD',sub:'#378ADD',adv:'#BA7517',NONE:'#B4B2A9'};
+  const LTCS={core:'#04342C',klammer:'#26215C',sub:'#042C53',adv:'#412402',NONE:'#444441'};
+  const FCBGS={VF:'#FAECE7',LSK:'#EEEDFE',RSK:'#EEEDFE',MF:'#E1F5EE',C:'#E6F1FB',Rel:'#E6F1FB',NF:'#FAEEDA',Neg:'#FBEAF0',NONE:'#F1EFE8'};
+  const FCBDS={VF:'#D85A30',LSK:'#7F77DD',RSK:'#7F77DD',MF:'#1D9E75',C:'#378ADD',Rel:'#378ADD',NF:'#BA7517',Neg:'#D4537E',NONE:'#B4B2A9'};
+  const FCTCS={VF:'#712B13',LSK:'#26215C',RSK:'#26215C',MF:'#04342C',C:'#042C53',Rel:'#042C53',NF:'#412402',Neg:'#4B1528',NONE:'#444441'};
+
+  const svg=document.getElementById('clause-arc-svg');
+  svg.setAttribute('viewBox',`0 0 ${TW} ${SH}`);
+  svg.setAttribute('width','100%');
+  svg.style.minHeight=SH+'px';
+  svg.setAttribute('height',SH);
+
+  const idx={};
+  toks.forEach((t,i)=>idx[t.id]=i);
+
+  let html=`<defs><marker id="cah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 2L9 5L1 8" fill="none" stroke="#B4B2A9" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>`;
+
+  // Draw arcs if clause_arcs present
+  carcs.forEach(a=>{
+    if(a.t<0){
+      const fi=idx[a.f];if(fi===undefined)return;
+      const cx=xs[fi]+ws[fi]/2;
+      html+=`<line x1="${cx}" y1="${BASELINE}" x2="${cx}" y2="12" stroke="#D3D1C7" stroke-width="0.7" stroke-dasharray="3 2"/>`;
+      html+=`<text x="${cx}" y="10" text-anchor="middle" font-size="9" fill="#B4B2A9" font-family="-apple-system,sans-serif">ROOT</text>`;
+      return;
+    }
+    const fi=idx[a.f],ti=idx[a.t];
+    if(fi===undefined||ti===undefined)return;
+    const x1=xs[fi]+ws[fi]/2, x2=xs[ti]+ws[ti]/2;
+    const dist=Math.abs(fi-ti);
+    const arcH=Math.min(16+dist*20,90);
+    const mx=(x1+x2)/2, cy=BASELINE-arcH;
+    html+=`<path d="M${x1},${BASELINE} Q${mx},${cy} ${x2},${BASELINE}" fill="none" stroke="#C8C5BB" stroke-width="0.8" marker-end="url(#cah)"/>`;
+    const cDepZh={'ROOT':'根节点','SB':'主语','OA':'直接宾语','DA':'间接宾语','MO':'状语','PD':'表语','OBJ':'宾语从句','ATTR':'定语','CP':'引导词','NG':'否定','ADV':'副词修饰'};
+    const clZh=cDepZh[a.l]?a.l+' '+cDepZh[a.l]:a.l;
+    html+=`<text x="${mx}" y="${cy-2}" text-anchor="middle" font-size="8" fill="#B4B2A9" font-family="-apple-system,sans-serif"><title>${esc(clZh)}</title>${esc(a.l)}</text>`;
+  });
+
+  // Draw nodes using field colors (not just layer colors) for the inner diagram
+  toks.forEach((t,i)=>{
+    const nx=xs[i], nw=ws[i];
+    const bg=FCBGS[t.field]||LBGS[t.layer]||'#F1EFE8';
+    const bd=FCBDS[t.field]||LBDS[t.layer]||'#B4B2A9';
+    const tc=FCTCS[t.field]||LTCS[t.layer]||'#444441';
+    html+=`<g>
+      <rect x="${nx}" y="${BASELINE}" width="${nw}" height="${NH}" rx="5" fill="${bg}" stroke="${bd}" stroke-width="0.5"/>
+      <text x="${nx+nw/2}" y="${BASELINE+NH/2+1}" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="500" fill="${tc}" font-family="-apple-system,sans-serif">${esc(t.word)}</text>
+      <text x="${nx+nw/2}" y="${BASELINE+NH+11}" text-anchor="middle" font-size="9" fill="#888780" font-family="-apple-system,sans-serif"><title>${esc(t.field)}: ${esc(t.role)}</title>${esc(t.field)}: ${esc(abbrevRole(t.role))}</text>
+    </g>`;
+  });
+
+  svg.innerHTML=html;
+}
+
+/* ═══ ELIM ═══ */
+function renderElim(){
+  if(!DATA||!DATA.main_tokens)return;
+  const LC={core:'var(--lc-core)',klammer:'var(--lc-klammer)',sub:'var(--lc-sub)',adv:'var(--lc-adv)'};
+  let html='';
+  DATA.main_tokens.forEach(item=>{
+    if(item.type==='token'&&item.field==='NONE')return;
+    if(item.type==='token'){
+      if(item.field==='NONE'){html+=`<span style="color:var(--text3);margin:0 2px;font-size:14px">${esc(item.word)}</span>`;return;}
+      const out=eliminated.has(item.id);
+      const fixed=!item.deletable;
+      html+=`<span class="etok${out?' out':''}${fixed?' fixed':''}" onclick="togElim(${item.id},'token')">
+        <span class="edot" style="background:${LC[item.layer]||'#888'}"></span>${esc(item.word)}
+      </span>`;
+    } else if(item.type==='clause_block'){
+      const out=eliminated.has(item.id);
+      const preview=(item.clause_tokens||[]).map(t=>t.word).join(' ');
+      html+=`<span class="etok${out?' out':''}" onclick="togElim(${item.id},'clause')" title="${esc(item.delete_reason||'')}">
+        <span class="edot" style="background:var(--lc-sub)"></span>${esc(preview)}
+      </span>`;
+    }
+  });
+  document.getElementById('elim-sent').innerHTML=html;
+}
+
+function togElim(id,type){
+  if(!DATA)return;
+  if(type==='clause'){
+    const cb=DATA.main_tokens.find(x=>x.id===id);if(!cb)return;
+    const nowOut=!eliminated.has(id);
+    nowOut?eliminated.add(id):eliminated.delete(id);
+    renderElim();
+    document.getElementById('elim-info').innerHTML=`
+      <div class="iword" style="font-size:14px">${esc(cb.clause_type||"从句")}</div>
+      <div class="chips"><span class="chip" style="color:${nowOut?'#D85A30':'#1D9E75'}">${nowOut?'已删除（整体）':'已还原'}</span><span class="chip">后场 NF</span></div>
+      <div class="idesc">${esc(cb.delete_reason||'从句整体后置于 Nachfeld，作为信息补充，可删除而不影响主句合法性。')}</div>`;
+    return;
+  }
+  const t=DATA.main_tokens.find(x=>x.id===id);if(!t)return;
+  if(!t.deletable){
+    document.getElementById('elim-info').innerHTML=`
+      <div class="iword" style="font-size:14px">${esc(t.word)}</div>
+      <div class="chips"><span class="chip" style="color:#D85A30;border-color:#D85A30">不可删除</span><span class="chip">${t.layer==='core'?'核心论元':'括号动词'}</span></div>
+      <div class="idesc">${esc(t.delete_reason||'这个成分是句子必需结构。')}</div>`;
+    return;
+  }
+  const nowOut=!eliminated.has(id);
+  nowOut?eliminated.add(id):eliminated.delete(id);
+  renderElim();
+  document.getElementById('elim-info').innerHTML=`
+    <div class="iword" style="font-size:14px">${esc(t.word)}</div>
+    <div class="chips"><span class="chip" style="color:${nowOut?'#D85A30':'#1D9E75'}">${nowOut?'已删除':'已还原'}</span><span class="chip">修饰语</span></div>
+    <div class="idesc">${esc(t.delete_reason||t.info)}</div>
+    ${phraseTable(t)}`;
+}
+
+function resetElim(){eliminated=new Set();renderElim();document.getElementById('elim-info').innerHTML=`<div class="hint">点击任意词块，测试该成分是否可以删除</div>`;}
+function doElim(layer){
+  if(!DATA)return;
+  DATA.main_tokens.forEach(item=>{
+    if(layer==='adv'&&item.type==='token'&&item.layer==='adv') eliminated.add(item.id);
+    if(layer==='sub'&&item.type==='clause_block') eliminated.add(item.id);
+  });
+  renderElim();
+  const msg={adv:'已删除所有修饰语，保留主句骨架。',sub:'已删除所有从句，主句依然合法完整。'}[layer]||'';
+  document.getElementById('elim-info').innerHTML=`<div class="idesc">${msg}</div>`;
+}
+function showCore(){
+  if(!DATA)return;
+  DATA.main_tokens.forEach(item=>{
+    if(item.type==='token'&&item.layer==='adv') eliminated.add(item.id);
+    if(item.type==='clause_block') eliminated.add(item.id);
+  });
+  renderElim();
+  document.getElementById('elim-info').innerHTML=`<div class="idesc">最小合法主干：核心论元 + 括号动词。这是句子不可再缩减的结构核心。</div>`;
+}
+
+function toggleGloss(btn){
+  btn.classList.toggle('open');
+  const panel=btn.nextElementSibling;
+  panel.classList.toggle('visible');
+}
+
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+document.getElementById('sent').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))analyze();});
+
+// ── Reference tables ─────────────────────────────────────────────────────────
+const DEP_LABELS={
+  ROOT:'根节点（句子核心谓语）',
+  SB:'主语（Subjekt）',
+  OA:'直接宾语，第四格（Akkusativobjekt）',
+  DA:'间接宾语，第三格（Dativobjekt）',
+  MO:'状语修饰（Modalangabe / Adverbiale）',
+  PD:'表语（Prädikativ，系动词后）',
+  OBJ:'宾语从句（Objektsatz）',
+  ATTR:'定语修饰（Attribut）',
+  CP:'引导词（Komplementierer）',
+  NG:'否定词（Negation）',
+  ADV:'副词性修饰',
+  PUNCT:'标点符号',
+  OC:'补语从句（Objektsatz-Comp.）',
+  SB2:'第二主语 / 谓语成分',
+};
+const POS_LABELS={
+  NN:'普通名词',VVFIN:'定式动词（主要动词）',VAFIN:'定式助动词',
+  VVPP:'过去分词',VAINF:'不定式助动词',ART:'冠词',
+  PPER:'人称代词',PPOSAT:'物主代词（定语用）',PRELS:'关系代词',
+  ADV:'副词',ADJD:'形容词（谓语用）',ADJA:'形容词（定语用）',
+  APPR:'介词',APPRART:'介词+冠词合并',KOUS:'从属连词',
+  KON:'并列连词',PTKNEG:'否定词',CARD:'基数词',NE:'专有名词',
+  PP:'介词短语',APPO:'后置介词',
+};
+const FIELD_LABELS={
+  VF:'前场（Vorfeld）— 动词前，通常一个成分',
+  LSK:'左括号（linke Satzklammer）— 定式动词',
+  RSK:'右括号（rechte Satzklammer）— 不定式 / 过去分词',
+  MF:'中间场（Mittelfeld）— 括号之间的成分',
+  NF:'后场（Nachfeld）— 括号之后，通常为从句',
+  C:'引导词位（Komplementierer）— 从句连词 / 关系代词',
+  Rel:'关系代词位',
+  Neg:'否定词位',
+};
+const LAYER_LABELS={
+  core:'核心论元 — 动词必须的主语 / 宾语，不可删除',
+  klammer:'括号成分 — 构成动词框架，不可删除',
+  sub:'从句成分 — 整个从句可作为整体删除',
+  adv:'修饰成分 — 状语 / 定语，可自由删除',
+};
+
+function renderCard(abbr, full, color){
+  return `<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:6px 10px;display:flex;gap:8px;align-items:flex-start">
+    <span style="font-size:11px;font-weight:600;color:${color||'var(--lc-core)'};white-space:nowrap;min-width:44px">${esc(abbr)}</span>
+    <span style="font-size:11px;color:var(--text2);line-height:1.5">${esc(full)}</span>
+  </div>`;
+}
+
+function buildRefTables(){
+  const depEl=document.getElementById('abbrev-table');
+  if(depEl){
+    let depHtml='<div><div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">依存关系标签</div>';
+    Object.entries(DEP_LABELS).forEach(([k,v])=>depHtml+=renderCard(k,v,'#1D9E75'));
+    depHtml+='</div><div><div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">常见词性标签（POS）</div>';
+    Object.entries(POS_LABELS).forEach(([k,v])=>depHtml+=renderCard(k,v,'#7F77DD'));
+    depHtml+='</div>';
+    depEl.innerHTML=depHtml;
+  }
+  const fieldEl=document.getElementById('field-ref-table');
+  if(fieldEl){
+    let fHtml='<div><div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">场域位置（Felder）</div>';
+    Object.entries(FIELD_LABELS).forEach(([k,v])=>fHtml+=renderCard(k,v,'#BA7517'));
+    fHtml+='</div><div><div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">层级说明</div>';
+    Object.entries(LAYER_LABELS).forEach(([k,v])=>fHtml+=renderCard(k,v,'#378ADD'));
+    fHtml+='</div>';
+    fieldEl.innerHTML=fHtml;
+  }
+}
+// Single combined load handler
+window.addEventListener('load',()=>{
+  if(getKey())setInd(true);
+  const ep=getEndpoint();
+  const sel=document.getElementById('api-endpoint');
+  if(sel){sel.value=ep;updateEndpointHint(ep);}
+  buildRefTables();
+});
+</script>
+</body>
+</html>
