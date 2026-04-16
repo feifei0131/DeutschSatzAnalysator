@@ -12,5 +12,10 @@
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, X-Api-Key" }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/analyze.js": {
+      "maxDuration": 60
+    }
+  }
 }
