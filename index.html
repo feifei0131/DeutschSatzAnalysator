@@ -590,7 +590,7 @@ async function analyze(){
   const key=getKey();
   if(!key){setStatus(false,'请先配置 DeepSeek API Key',true);document.getElementById('api-setup').open=true;return;}
   document.getElementById('abtn').disabled=true;
-  setStatus(true,'正在分析…');
+  setStatus(true,'正在分析… 复杂句子可能需要 20-40 秒，请耐心等待');
   document.getElementById('results').style.display='none';
   DATA=null;eliminated=new Set();expandedClauses=new Set();
   try{
@@ -629,11 +629,9 @@ async function analyze(){
     const msg=e.message||String(e);
     let hint='';
     if(msg.includes('fetch')||msg.includes('network')||msg.includes('Failed')){
-      hint='<br><span style="font-size:11px">提示：①检查网络连接 ②确认 API Key 正确 ③句子过长时请尝试缩短后重试</span>';
+      hint='<br><span style="font-size:11px">提示：①检查网络连接 ②确认 API Key 正确有效 ③稍后重试</span>';
     } else if(msg.includes('401')||msg.includes('Unauthorized')){
       hint='<br><span style="font-size:11px">提示：API Key 无效或已过期，请重新获取</span>';
-    } else if(msg.includes('504')||msg.includes('超时')){
-      hint='<br><span style="font-size:11px">提示：句子可能过长或过于复杂，请尝试缩短后重试；或稍等片刻再次分析</span>';
     } else if(msg.includes('429')){
       hint='<br><span style="font-size:11px">提示：请求太频繁，稍等几秒再试</span>';
     } else if(msg.includes('截断')||msg.includes('length')){
