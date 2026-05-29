@@ -24,6 +24,7 @@ export default async function handler(req) {
       temperature: body.temperature ?? 0.1,
       messages: body.messages,
       stream: true,
+      thinking: { type: 'disabled' },
     }),
   });
 
@@ -56,18 +57,6 @@ export default async function handler(req) {
             if (!trimmed.startsWith('data:')) continue;
             const data = trimmed.slice(5).trim();
             if (!data || data === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed?.choices?.[0]?.delta?.content;
-              if (typeof delta === 'string') accumulated += delta;
-            } catch {}
-          }
-        }
-
-        // Handle any remaining data
-        if (remainder.trim().startsWith('data:')) {
-          const data = remainder.trim().slice(5).trim();
-          if (data && data !== '[DONE]') {
             try {
               const parsed = JSON.parse(data);
               const delta = parsed?.choices?.[0]?.delta?.content;
