@@ -1315,11 +1315,28 @@ window.addEventListener('load',()=>{
   buildRefTables();
 });
 
+let meanCache = {};
+function renderMarkdown(text){
+  return text
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/### (.+)/g,'<h4 style="margin:12px 0 4px;font-size:14px;font-weight:600">$1</h4>')
+    .replace(/## (.+)/g,'<h3 style="margin:14px 0 4px;font-size:15px;font-weight:600">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^\s*\*\s+(.+)/gm,'<li style="margin:3px 0 3px 16px">$1</li>')
+    .replace(/(<li[^>]*>.*<\/li>
+?)+/g,'<ul style="margin:6px 0;padding:0;list-style:disc">$&</ul>')
+    .replace(/
+{2,}/g,'</p><p style="margin:6px 0">')
+    .replace(/
+/g,'<br>');
+}
 async function renderMean(){
   const box=document.getElementById("mean-content");
   if(!box)return;
-  box.innerHTML='<div class="hint">分析中...</div>';
   const sent=DATA?.sentence||"";
+  if(!sent)return;
+  if(meanCache[sent]){box.innerHTML=meanCache[sent];return;}
+  box.innerHTML='<div class="hint">分析中...</div>';
   const apiKey=localStorage.getItem("dsk3")||"";
   if(!apiKey){box.innerHTML='<div class="hint">请先配置 API Key</div>';return;}
   try{
@@ -1328,7 +1345,7 @@ async function renderMean(){
       headers:{"Content-Type":"application/json","X-Api-Key":apiKey},
       body:JSON.stringify({
         messages:[
-          {role:"system",content:"你是德语语言专家。用中文分析德语句子，输出三部分：\n1.【意译】自然流畅的中文翻译\n2.【语法拆解】逐一说明主句/从句结构、谓语、宾语、状语等成分\n3.【关键词】列出3-5个重要词汇及其用法"},
+          {role:"system",content:"你是德语语言专家。直接输出分析内容，不要任何开场白或前缀。用中文分析德语句子，输出三部分：\n\n### 1.【意译】\n自然流畅的中文翻译\n\n### 2.【语法拆解】\n逐一说明主句/从句结构、谓语、宾语、状语等成分\n\n### 3.【关键词】\n列出3-5个重要词汇及其用法"},
           {role:"user",content:"分析这个句子："+sent}
         ],
         max_tokens:800,
@@ -1337,7 +1354,9 @@ async function renderMean(){
     });
     const d=await r.json();
     const text=d.choices?.[0]?.message?.content||"";
-    box.innerHTML='<div style="font-size:14px;line-height:1.9;white-space:pre-wrap">'+text.replace(/</g,"&lt;").replace(/>/g,"&gt;")+'</div>';
+    const html='<div style="font-size:14px;line-height:1.9"><p style="margin:6px 0">'+renderMarkdown(text)+'</p></div>';
+    meanCache[sent]=html;
+    box.innerHTML=html;
   }catch(e){box.innerHTML='<div class="hint">加载失败：'+e.message+'</div>';}
 }
 
