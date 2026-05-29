@@ -652,7 +652,7 @@ function setTab(t,btn){
   curTab=t;
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  ['topo','dep','elim'].forEach(id=>document.getElementById('tab-'+id).style.display=id===t?'':'none');
+  ['topo','dep','elim','mean'].forEach(id=>document.getElementById('tab-'+id).style.display=id===t?'':'none');
   if(t==='dep'&&DATA)renderDep();
   if(t==='elim'&&DATA)renderElim();
   if(t==='mean'&&DATA)renderMean();
