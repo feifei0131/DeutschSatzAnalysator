@@ -1320,7 +1320,7 @@ async function renderMean(){
   if(!box)return;
   box.innerHTML='<div class="hint">分析中...</div>';
   const sent=DATA?.sentence||"";
-  const apiKey=document.getElementById("apiKey")?.value||localStorage.getItem("dsKey")||"";
+  const apiKey=localStorage.getItem("dsk3")||"";
   if(!apiKey){box.innerHTML='<div class="hint">请先配置 API Key</div>';return;}
   try{
     const r=await fetch("/api/analyze",{
