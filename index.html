@@ -272,6 +272,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:3px}
     <button class="tab active" onclick="setTab('topo',this)">拓扑场</button>
     <button class="tab" onclick="setTab('dep',this)">依存树</button>
     <button class="tab" onclick="setTab('elim',this)">删除测试</button>
+    <button class="tab" onclick="setTab('mean',this)">句意拆解</button>
   </div>
 
   <!-- TOPO TAB -->
@@ -418,7 +419,11 @@ h1{font-size:20px;font-weight:600;margin-bottom:3px}
   </div>
 
   <!-- ELIM TAB -->
-  <div id="tab-elim" style="display:none">
+  <div id="tab-mean" style="display:none">
+  <div class="sechd">句意拆解</div>
+  <div id="mean-content"><div class="hint">请先在左侧输入句子并点击「分析」</div></div>
+</div>
+<div id="tab-elim" style="display:none">
     <div class="sechd">删除测试</div>
     <div class="gloss-wrap">
       <button class="gloss-toggle" onclick="toggleGloss(this)"><span class="arrow">▶</span> 删除测试说明</button>
@@ -625,6 +630,7 @@ async function analyze(){
     renderTopo();
     if(curTab==='dep')renderDep();
     if(curTab==='elim')renderElim();
+    if(curTab==='mean')renderMean();
   }catch(e){
     const msg=e.message||String(e);
     let hint='';
@@ -649,6 +655,7 @@ function setTab(t,btn){
   ['topo','dep','elim'].forEach(id=>document.getElementById('tab-'+id).style.display=id===t?'':'none');
   if(t==='dep'&&DATA)renderDep();
   if(t==='elim'&&DATA)renderElim();
+  if(t==='mean'&&DATA)renderMean();
 }
 
 function toggleL(btn){
@@ -1307,6 +1314,33 @@ window.addEventListener('load',()=>{
   if(getKey())setInd(true);
   buildRefTables();
 });
+
+async function renderMean(){
+  const box=document.getElementById("mean-content");
+  if(!box)return;
+  box.innerHTML='<div class="hint">分析中...</div>';
+  const sent=DATA?.sentence||"";
+  const apiKey=document.getElementById("apiKey")?.value||localStorage.getItem("dsKey")||"";
+  if(!apiKey){box.innerHTML='<div class="hint">请先配置 API Key</div>';return;}
+  try{
+    const r=await fetch("/api/analyze",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Api-Key":apiKey},
+      body:JSON.stringify({
+        messages:[
+          {role:"system",content:"你是德语语言专家。用中文分析德语句子，输出三部分：\n1.【意译】自然流畅的中文翻译\n2.【语法拆解】逐一说明主句/从句结构、谓语、宾语、状语等成分\n3.【关键词】列出3-5个重要词汇及其用法"},
+          {role:"user",content:"分析这个句子："+sent}
+        ],
+        max_tokens:800,
+        temperature:0.3
+      })
+    });
+    const d=await r.json();
+    const text=d.choices?.[0]?.message?.content||"";
+    box.innerHTML='<div style="font-size:14px;line-height:1.9;white-space:pre-wrap">'+text.replace(/</g,"&lt;").replace(/>/g,"&gt;")+'</div>';
+  }catch(e){box.innerHTML='<div class="hint">加载失败：'+e.message+'</div>';}
+}
+
 </script>
 </body>
 </html>
