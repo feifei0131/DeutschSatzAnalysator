@@ -23,7 +23,7 @@ export default async function handler(req) {
       max_tokens: Math.min(body.max_tokens || 4000, 4000),
       temperature: body.temperature ?? 0.1,
       messages: body.messages,
-      stream: false,
+      stream: true,
     }),
   });
 
@@ -34,10 +34,63 @@ export default async function handler(req) {
     return err(msg, upstream.status);
   }
 
-  const data = await upstream.json();
-  return new Response(JSON.stringify(data), {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const reader = upstream.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let remainder = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = remainder + decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          remainder = lines.pop() ?? '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const data = trimmed.slice(5).trim();
+            if (!data || data === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed?.choices?.[0]?.delta?.content;
+              if (typeof delta === 'string') accumulated += delta;
+            } catch {}
+          }
+        }
+
+        // Handle any remaining data
+        if (remainder.trim().startsWith('data:')) {
+          const data = remainder.trim().slice(5).trim();
+          if (data && data !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed?.choices?.[0]?.delta?.content;
+              if (typeof delta === 'string') accumulated += delta;
+            } catch {}
+          }
+        }
+
+        const result = JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: accumulated }, finish_reason: 'stop' }],
+        });
+        controller.enqueue(encoder.encode(result));
+      } catch (e) {
+        controller.enqueue(encoder.encode(JSON.stringify({ error: '流读取失败: ' + e.message })));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
     status: 200,
-    headers: { 'Content-Type': 'application/json', ...cors() },
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
   });
 }
 
