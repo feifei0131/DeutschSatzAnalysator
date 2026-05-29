@@ -1315,11 +1315,24 @@ window.addEventListener('load',()=>{
   buildRefTables();
 });
 
+let meanCache = {};
+function renderMarkdown(text){
+  let h = text
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  h = h.replace(/### (.+)/g,'<h4 style="margin:12px 0 4px;font-size:14px;font-weight:600">$1</h4>');
+  h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  h = h.replace(/^\* (.+)/gm,'<li style="margin:3px 0 3px 16px">$1</li>');
+  h = h.replace(/\n\n/g,'<br><br>');
+  h = h.replace(/\n/g,'<br>');
+  return h;
+}
 async function renderMean(){
   const box=document.getElementById("mean-content");
   if(!box)return;
-  box.innerHTML='<div class="hint">分析中...</div>';
   const sent=DATA?.sentence||"";
+  if(!sent)return;
+  if(meanCache[sent]){box.innerHTML=meanCache[sent];return;}
+  box.innerHTML='<div class="hint">分析中...</div>';
   const apiKey=localStorage.getItem("dsk3")||"";
   if(!apiKey){box.innerHTML='<div class="hint">请先配置 API Key</div>';return;}
   try{
@@ -1328,7 +1341,7 @@ async function renderMean(){
       headers:{"Content-Type":"application/json","X-Api-Key":apiKey},
       body:JSON.stringify({
         messages:[
-          {role:"system",content:"你是德语语言专家。用中文分析德语句子，输出三部分：\n1.【意译】自然流畅的中文翻译\n2.【语法拆解】逐一说明主句/从句结构、谓语、宾语、状语等成分\n3.【关键词】列出3-5个重要词汇及其用法"},
+          {role:"system",content:"你是德语语言专家。直接输出分析内容，不要任何开场白。用中文分析德语句子，输出三部分：\n### 1.【意译】\n自然流畅的中文翻译\n\n### 2.【语法拆解】\n逐一说明句子结构、谓语、宾语、状语等成分\n\n### 3.【关键词】\n列出3-5个重要词汇及其用法"},
           {role:"user",content:"分析这个句子："+sent}
         ],
         max_tokens:800,
@@ -1337,9 +1350,12 @@ async function renderMean(){
     });
     const d=await r.json();
     const text=d.choices?.[0]?.message?.content||"";
-    box.innerHTML='<div style="font-size:14px;line-height:1.9;white-space:pre-wrap">'+text.replace(/</g,"&lt;").replace(/>/g,"&gt;")+'</div>';
+    const html='<div style="font-size:14px;line-height:1.9">'+renderMarkdown(text)+'</div>';
+    meanCache[sent]=html;
+    box.innerHTML=html;
   }catch(e){box.innerHTML='<div class="hint">加载失败：'+e.message+'</div>';}
 }
+
 
 </script>
 </body>
